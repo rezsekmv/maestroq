@@ -125,29 +125,17 @@ describe("printJobs colors", () => {
     expect(output).not.toContain("\x1b[");
   });
 
-  it("bolds the first row when there is no header and color is on", () => {
+  it("never bolds any row", () => {
     printJobs(
       {
         jobs: [
-          job({ id: "aaaaaaaa-…", status: "running", startedAt: now - 5_000 }),
-          job({ id: "bbbbbbbb-…", status: "queued" }),
+          job({ status: "running", startedAt: now - 5_000 }),
+          job({ status: "queued" }),
         ],
       },
       { color: true },
     );
-    const lines = output.trimEnd().split("\n");
-    expect(lines[0]).toContain("\x1b[1m");
-    expect(lines[1]).not.toContain("\x1b[1m");
-  });
-
-  it("does NOT bold the first row when a header is present", () => {
-    printJobs(
-      { jobs: [job({ status: "running", startedAt: now - 5_000 })] },
-      { color: true, header: true },
-    );
-    const lines = output.trimEnd().split("\n");
-    expect(lines[0]).not.toContain("\x1b[1m"); // header itself isn't styled
-    expect(lines[1]).not.toContain("\x1b[1m"); // first data row also not bold
+    expect(output).not.toContain("\x1b[1m");
   });
 
   it("handles single job payload (mq status <id>)", () => {

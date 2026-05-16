@@ -168,9 +168,13 @@ const status = defineCommand({
       description: "Show all jobs (overrides --since and --limit)",
     },
     watch: {
-      type: "string",
+      type: "boolean",
       alias: "w",
-      description: "Re-render every N seconds (default 2). Pass --watch=5 for 5s.",
+      description: "Re-render every --interval seconds (default 2). Ctrl-C to exit.",
+    },
+    interval: {
+      type: "string",
+      description: "Refresh interval in seconds when --watch is on (default 2).",
     },
     color: { type: "string", description: "auto (default) | always | never" },
   },
@@ -201,35 +205,34 @@ const status = defineCommand({
       });
     };
 
-    if (args.watch === undefined) {
+    if (!args.watch) {
       const r = await fetchOnce();
       renderOnce(r.payload);
       return;
     }
 
-    const intervalMs = parseWatchInterval(args.watch);
+    const intervalMs = parseWatchInterval(args.interval);
     const useAnsi = process.stdout.isTTY && !args.json;
-    let stopping = false;
-    process.once("SIGINT", () => {
-      stopping = true;
+    process.on("SIGINT", () => {
+      process.stdout.write("\n");
+      process.exit(0);
     });
-    while (!stopping) {
+    for (;;) {
       const r = await fetchOnce();
       if (useAnsi) process.stdout.write("\x1b[2J\x1b[H");
       if (useAnsi) {
-        process.stdout.write(`maestroq — ${new Date().toLocaleTimeString()} (refresh ${intervalMs / 1000}s, Ctrl-C to exit)\n\n`);
+        process.stdout.write(
+          `maestroq — ${new Date().toLocaleTimeString()} (refresh ${intervalMs / 1000}s, Ctrl-C to exit)\n\n`,
+        );
       }
       renderOnce(r.payload);
-      await new Promise<void>((resolve) => {
-        const t = setTimeout(resolve, intervalMs);
-        t.unref();
-      });
+      await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
     }
   },
 });
 
-function parseWatchInterval(raw: string): number {
-  if (raw === "" || raw === "true") return 2_000;
+function parseWatchInterval(raw: string | undefined): number {
+  if (!raw) return 2_000;
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return 2_000;
   return Math.max(500, Math.floor(n * 1000));

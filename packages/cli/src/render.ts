@@ -104,17 +104,14 @@ export function printJobs(payload: unknown, opts: PrintJobsOptions = {}): void {
   if (opts.header) {
     process.stdout.write(`${cols.map((c) => (c.width ? c.name.padEnd(c.width) : c.name)).join(" ")}\n`);
   }
-  for (let i = 0; i < list.length; i += 1) {
-    const j = list[i]!;
-    const bold = Boolean(opts.color && !opts.header && i === 0);
+  for (const j of list) {
     const row = cols
       .map((c) => {
         const v = c.value(j, now);
         const padded = c.width ? v.padEnd(c.width) : v;
-        if (!opts.color) return padded;
-        const tone = c.paint ? c.paint(j) : null;
-        if (!tone && !bold) return padded;
-        return paint(padded, tone as Parameters<typeof paint>[1], { bold });
+        if (!opts.color || !c.paint) return padded;
+        const tone = c.paint(j);
+        return tone ? paint(padded, tone as Parameters<typeof paint>[1]) : padded;
       })
       .join(" ");
     process.stdout.write(`${row}\n`);
