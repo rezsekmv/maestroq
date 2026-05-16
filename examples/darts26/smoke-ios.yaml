@@ -1,0 +1,10 @@
+platform: ios
+flows:
+  - .maestro/smoke.yaml
+build:
+  variant: release
+  cache: true
+label: "darts26 smoke iOS"
+env:
+  EXPO_PUBLIC_DEMO_MODE: "1"
+  SENTRY_DISABLE_AUTO_UPLOAD: "1"

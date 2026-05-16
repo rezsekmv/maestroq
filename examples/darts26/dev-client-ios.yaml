@@ -1,0 +1,9 @@
+platform: ios
+flows:
+  - .maestro/smoke.yaml
+build:
+  variant: debug
+  cache: true
+metro:
+  reuse: true
+label: "darts26 dev-client iOS"

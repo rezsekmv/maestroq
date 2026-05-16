@@ -1,0 +1,56 @@
+import { existsSync, mkdirSync } from "node:fs";
+import {
+  CONFIG_PATH,
+  ConfigSchema,
+  MAESTROQ_HOME,
+  QUEUE_PATH,
+  loadConfig,
+  type Config,
+} from "@maestroq/core";
+import { Dispatcher } from "./dispatcher.js";
+import { logger } from "./logger.js";
+import { MetroPortPool } from "./metro-pool.js";
+import { JobQueue } from "./queue.js";
+import { sweepStaleProcessGroups } from "./recovery.js";
+import { startDaemonServer } from "./server.js";
+
+export interface StartDaemonOptions {
+  configPath?: string;
+}
+
+export async function startDaemon(opts: StartDaemonOptions = {}): Promise<void> {
+  mkdirSync(MAESTROQ_HOME, { recursive: true });
+  const configPath = opts.configPath ?? CONFIG_PATH;
+  const config: Config = existsSync(configPath)
+    ? loadConfig(configPath)
+    : ConfigSchema.parse({});
+
+  const queue = new JobQueue(QUEUE_PATH);
+  queue.load();
+
+  const recovery = sweepStaleProcessGroups(queue);
+  if (recovery.failedJobIds.length > 0) {
+    logger.warn(
+      { killedPgids: recovery.killed, failedJobIds: recovery.failedJobIds },
+      "recovery: marked interrupted jobs as failed",
+    );
+  }
+
+  const metroPool = new MetroPortPool(config.metro.port_range);
+  const dispatcher = new Dispatcher(queue, metroPool, config, config.devices);
+
+  startDaemonServer({ queue, dispatcher });
+  dispatcher.start();
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startDaemon().catch((err) => {
+    logger.error({ err }, "daemon failed to start");
+    process.exit(1);
+  });
+}
+
+export * from "./queue.js";
+export * from "./recovery.js";
+export * from "./build-cache.js";
+export * from "./metro-pool.js";

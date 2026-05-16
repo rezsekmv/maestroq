@@ -1,0 +1,21 @@
+{
+  "name": "maestroq",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "mq": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@maestroq/core": "^0.1.0",
+    "@maestroq/daemon": "^0.1.0",
+    "citty": "^0.1.6",
+    "yaml": "^2.9.0"
+  }
+}

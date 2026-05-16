@@ -1,0 +1,7 @@
+platform: ios
+flows:
+  - .maestro/smoke.yaml
+build:
+  variant: release
+  cache: true
+label: "plain-rn smoke iOS"
