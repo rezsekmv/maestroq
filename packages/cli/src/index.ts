@@ -132,18 +132,58 @@ const status = defineCommand({
   args: {
     jobId: { type: "positional", description: "Job id (optional)", required: false },
     json: { type: "boolean", description: "Emit JSON" },
+    header: { type: "boolean", description: "Prepend a column header row" },
+    watch: {
+      type: "string",
+      alias: "w",
+      description: "Re-render every N seconds (default 2). Pass --watch=5 for 5s.",
+    },
   },
   async run({ args }) {
-    const r = await guard(() =>
-      callOnce({ op: "status", ...(args.jobId ? { jobId: args.jobId } : {}) }),
-    );
-    if (args.json) {
-      process.stdout.write(`${JSON.stringify(r.payload, null, 2)}\n`);
+    const fetchOnce = async (): Promise<{ payload?: unknown; error?: string }> =>
+      guard(() => callOnce({ op: "status", ...(args.jobId ? { jobId: args.jobId } : {}) }));
+
+    const renderOnce = (payload: unknown): void => {
+      if (args.json) {
+        process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+        return;
+      }
+      printJobs(payload, { header: Boolean(args.header) });
+    };
+
+    if (args.watch === undefined) {
+      const r = await fetchOnce();
+      renderOnce(r.payload);
       return;
     }
-    printJobs(r.payload);
+
+    const intervalMs = parseWatchInterval(args.watch);
+    const useAnsi = process.stdout.isTTY && !args.json;
+    let stopping = false;
+    process.once("SIGINT", () => {
+      stopping = true;
+    });
+    while (!stopping) {
+      const r = await fetchOnce();
+      if (useAnsi) process.stdout.write("\x1b[2J\x1b[H");
+      if (useAnsi) {
+        process.stdout.write(`maestroq — ${new Date().toLocaleTimeString()} (refresh ${intervalMs / 1000}s, Ctrl-C to exit)\n\n`);
+      }
+      renderOnce(r.payload);
+      await new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, intervalMs);
+        t.unref();
+      });
+    }
   },
 });
+
+function parseWatchInterval(raw: string): number {
+  if (raw === "" || raw === "true") return 2_000;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 2_000;
+  return Math.max(500, Math.floor(n * 1000));
+}
 
 const logs = defineCommand({
   meta: { name: "logs", description: "Print logs for a job; -f to follow" },
