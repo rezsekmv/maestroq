@@ -22,6 +22,7 @@ export class Worker extends EventEmitter {
   private busy = false;
   private cancelled = new Set<string>();
   private activePgid?: number;
+  private readonly cancelGraceMs = 5_000;
 
   constructor(
     private readonly device: DeviceConfig,
@@ -46,16 +47,32 @@ export class Worker extends EventEmitter {
 
   cancel(jobId: string): boolean {
     this.cancelled.add(jobId);
-    if (this.activePgid && typeof this.activePgid === "number") {
+    const pgid = this.activePgid;
+    if (!pgid || typeof pgid !== "number") return false;
+    try {
+      process.kill(-pgid, "SIGTERM");
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "ESRCH") logger.warn({ err, pgid }, "cancel: SIGTERM failed");
+      return false;
+    }
+    const escalation = setTimeout(() => {
+      if (this.activePgid !== pgid) return;
       try {
-        process.kill(-this.activePgid, "SIGTERM");
-        return true;
+        process.kill(-pgid, 0);
+      } catch {
+        return;
+      }
+      try {
+        process.kill(-pgid, "SIGKILL");
+        logger.warn({ pgid }, "cancel: escalated to SIGKILL after grace");
       } catch (err) {
         const code = (err as NodeJS.ErrnoException).code;
-        if (code !== "ESRCH") logger.warn({ err, pgid: this.activePgid }, "cancel: kill failed");
+        if (code !== "ESRCH") logger.warn({ err, pgid }, "cancel: SIGKILL failed");
       }
-    }
-    return false;
+    }, this.cancelGraceMs);
+    escalation.unref();
+    return true;
   }
 
   tryStart(): boolean {
