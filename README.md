@@ -1,84 +1,77 @@
 # maestroq
 
-> Local job queue/daemon for [Maestro](https://maestro.mobile.dev) UI tests. Share simulators and emulators across parallel git worktrees and AI coding agents on one machine.
+> A local job queue for [Maestro](https://maestro.mobile.dev) UI tests. Share simulators and emulators across parallel git worktrees and AI coding agents on one machine.
 
-> Status: **v0.1**, MIT-licensed, macOS + Linux. APIs and CLI surface may shift before v1.0.
+[![CI](https://github.com/rezsekmv/maestroq/actions/workflows/ci.yml/badge.svg)](https://github.com/rezsekmv/maestroq/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## The problem
+## Why maestroq?
 
-Maestro can only drive one iOS simulator (or Android emulator) at a time. The moment you have two agents — or two worktrees, or a developer and a CI job — sharing a Mac, they race the simulator and step on each other.
+Maestro can only drive one simulator or emulator at a time. The moment two AI agents — or two git worktrees, or a developer plus a CI job — share a Mac, they race the device. Tests interleave, installs collide, port 7001 goes stale.
 
-Existing workarounds either run remotely ([Maestro Cloud](https://cloud.mobile.dev)), assume one developer at a time (per-project shell scripts), or are tied to a specific runner ([Detox](https://wix.github.io/Detox/)'s device-registry pattern). None solve "N agents from N worktrees driving the same Mac."
+Existing options force a tradeoff: Maestro Cloud is paid and remote, Detox couples to Jest, a bash lockfile gives you no queue / no logs / no cancel.
 
-## The solution
+`maestroq` is one daemon per machine. It owns the local sim/emulator pool, FIFOs jobs per device, and dispatches work from any worktree over a Unix socket — so N agents on one Mac stops being a foot gun.
 
-`maestroq` runs a single daemon per machine that:
-
-- holds a FIFO queue of jobs (each job = `flows` to run on a specific platform),
-- owns the local pool of simulators/emulators,
-- spawns child builds, Metro instances, and Maestro runs in their own process groups,
-- exposes a tiny `mq` CLI over a Unix socket so any worktree can submit work.
-
-```
-┌──────────────┐    submit / status / logs / cancel   ┌──────────────────────┐
-│  mq client   │ ──────── unix socket ───────────────▶│       daemon         │
-└──────────────┘ ◀──────── log stream ─────────────── │ (single per machine) │
-                                                      └──────────┬───────────┘
-                                                                 │ dispatch
-                                                                 ▼
-                                                    ┌─────────────────────────┐
-                                                    │  worker pool (N)         │
-                                                    │  one per registered UDID │
-                                                    └─────────────────────────┘
-```
-
-See [docs/architecture.md](docs/architecture.md) for the full lifecycle.
-
-## Quick start
+## Install
 
 ```bash
 npm i -g maestroq
-mq daemon start &                     # foreground; launchd template lives in docs/launchd.md
-cd ~/my-app && mq init --from-package-json
-$EDITOR ~/.maestroq/config.yaml       # fill in your sim UDID + AVD name
-mq run examples/darts26/smoke-ios.yaml
+mq daemon start &
+$EDITOR ~/.maestroq/config.yaml      # add your iOS UDID + Android emulator id
 ```
 
-## Job spec
+See [`docs/launchd.md`](docs/launchd.md) for installing the daemon as a service.
+
+## Use
+
+A job spec is a small YAML file:
 
 ```yaml
-platform: ios                # or android
-flows:
-  - .maestro/smoke.yaml
-build:
-  variant: release           # or debug for dev-client
-  cache: true                # auto-disabled when working tree is dirty
-metro:
-  reuse: true                # only honored when variant: debug
-env:
-  EXPO_PUBLIC_DEMO_MODE: "1"
-priority: 0
-rebootSimBefore: false
-label: "darts26 smoke iOS"
+platform: ios
+flows: [.maestro/e2e/smoke]
+build: { variant: release, cache: true }
+rebootSimBefore: true
+label: smoke iOS
 ```
 
-Submit it with `mq run spec.yaml` (blocks, streams logs, exit code mirrors the job) or `mq submit spec.yaml` (fire-and-forget, prints the job id).
+```bash
+mq run maestroq/smoke-ios.yaml      # blocks, streams logs, exits with the maestro code
+mq submit maestroq/smoke-ios.yaml   # async — prints the job id and returns
+mq status -lH -w                    # live queue (long view, header, watch)
+mq logs <id> -f
+mq cancel <id>
+```
 
-## Not in v0.1
+## The killer demo
 
-- Parallel runs on more than one iOS simulator
-- Windows
-- Physical devices (works in theory — untested)
-- Remote / TCP transport (Unix socket only)
+Two worktrees, both submitting iOS + Android in parallel:
 
-## Why not Detox / Maestro Cloud / a lockfile?
+```
+ID       WORKTREE     PLAT    STATUS      CREATED  STARTED  DUR     EXIT
+17aad925 darts26      ios     succeeded   6m47s    6m47s    86.0s   0
+03deb076 darts26      android succeeded   6m47s    6m47s    110.6s  0
+ab2079e3 my-feature   ios     succeeded   6m47s    5m21s    87.1s   0
+9d5b7412 my-feature   android succeeded   6m46s    4m56s    85.4s   0
+```
 
-| Option        | Limitation we hit                                       |
-| ------------- | ------------------------------------------------------- |
-| Detox         | Tied to Jest workers; not generic                       |
-| Maestro Cloud | Remote, paid, no local sim ownership                    |
-| Bash lockfile | No FIFO across agents, no status/logs/cancel, no Metro  |
+`darts26` and `my-feature` started their iOS jobs at the same instant; `my-feature`'s iOS started *exactly* when `darts26`'s iOS finished. Same for Android. No agent had to know about the others.
 
-## License
+## Wiring AI agents
 
-MIT — see [LICENSE](./LICENSE).
+`mq run` is a drop-in for `maestro test`: it blocks, streams logs, exits with the underlying exit code. Tell your agent:
+
+> Run Maestro flows via `mq run <spec.yaml>`, not `maestro test`. If the daemon isn't running, surface the one-line hint and ask the human to start it.
+
+See [`AGENTS.md`](AGENTS.md) for the full architectural guide for contributors.
+
+## Docs
+
+- [Architecture & lifecycle](docs/architecture.md)
+- [Service install (launchd / systemd)](docs/launchd.md)
+- [Notes for AI agent workflows](docs/ai-agents.md)
+- [Contributor guide / invariants](AGENTS.md)
+
+---
+
+Licensed under [MIT](LICENSE).
