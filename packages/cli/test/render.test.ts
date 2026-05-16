@@ -36,25 +36,33 @@ function job(overrides: Partial<JobRecord> = {}): JobRecord {
   };
 }
 
-describe("printJobs", () => {
-  it("emits one row per job without a header by default", () => {
+describe("printJobs short (default)", () => {
+  it("emits the 5-col short view without a header by default", () => {
     printJobs({ jobs: [job()] });
-    const lines = output.trimEnd().split("\n");
+    const lines = output.trimEnd().split("\n").map((l) => l.trimEnd());
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^11111111\s+x\s+ios\s+queued/);
+    expect(lines[0]).toMatch(/^11111111\s+x\s+ios\s+queued\s+-$/);
   });
 
-  it("prepends a header row when header: true", () => {
+  it("short header is ID WORKTREE PLAT STATUS DUR (no CREATED/STARTED/EXIT/LABEL)", () => {
     printJobs({ jobs: [job()] }, { header: true });
+    const lines = output.trimEnd().split("\n").map((l) => l.trimEnd());
+    expect(lines[0]).toMatch(/^ID\s+WORKTREE\s+PLAT\s+STATUS\s+DUR$/);
+    expect(lines[0]).not.toMatch(/CREATED|STARTED|EXIT|LABEL/);
+  });
+});
+
+describe("printJobs long (-l/--long)", () => {
+  it("includes WORKTREE, CREATED, STARTED, EXIT", () => {
+    printJobs({ jobs: [job()] }, { header: true, long: true });
     const lines = output.trimEnd().split("\n");
-    expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(/^ID\s+WORKTREE\s+PLAT\s+STATUS\s+CREATED\s+STARTED\s+DUR\s+EXIT\s+LABEL$/);
     expect(lines[1]).toMatch(/^11111111\s+x\s+ios\s+queued\s+\d+s\s+-\s+-\s+-\s+smoke iOS$/);
   });
 
   it("shows running duration for an in-flight job", () => {
     const startedAt = now - 12_000;
-    printJobs({ jobs: [job({ status: "running", startedAt })] }, { header: false });
+    printJobs({ jobs: [job({ status: "running", startedAt })] }, { long: true });
     expect(output).toMatch(/running\s+\d+s\s+\d+s\s+1[12]\.\ds/);
   });
 
@@ -63,7 +71,7 @@ describe("printJobs", () => {
     const finishedAt = now - 5_000;
     printJobs(
       { jobs: [job({ status: "succeeded", startedAt, finishedAt, exitCode: 0 })] },
-      { header: false },
+      { long: true },
     );
     expect(output).toMatch(/succeeded\s+\d+s\s+\d+m\d+s\s+85\.0s\s+0\s+smoke iOS/);
   });
@@ -76,9 +84,70 @@ describe("printJobs", () => {
       platform: "android",
       label: "x",
     });
-    printJobs({ jobs: [{ ...job(), spec: longSpec }] }, { header: true });
+    printJobs({ jobs: [{ ...job(), spec: longSpec }] }, { header: true, long: true });
     const lines = output.trimEnd().split("\n");
     expect(lines[1]).toMatch(/very-long-worktre…/);
+  });
+});
+
+describe("printJobs colors", () => {
+  it("wraps STATUS in green when succeeded + color:true", () => {
+    printJobs(
+      {
+        jobs: [
+          job({
+            status: "succeeded",
+            startedAt: now - 30_000,
+            finishedAt: now - 5_000,
+            exitCode: 0,
+          }),
+        ],
+      },
+      { long: true, color: true },
+    );
+    expect(output).toContain("\x1b[32msucceeded");
+    expect(output).toMatch(/\x1b\[32m0/);
+  });
+
+  it("wraps STATUS in red for failed and EXIT in red for non-zero", () => {
+    printJobs(
+      {
+        jobs: [job({ status: "failed", startedAt: now - 30_000, finishedAt: now - 5_000, exitCode: 1 })],
+      },
+      { long: true, color: true },
+    );
+    expect(output).toContain("\x1b[31mfailed");
+    expect(output).toMatch(/\x1b\[31m1/);
+  });
+
+  it("emits no ANSI when color is off", () => {
+    printJobs({ jobs: [job({ status: "succeeded" })] }, { long: true, color: false });
+    expect(output).not.toContain("\x1b[");
+  });
+
+  it("bolds the first row when there is no header and color is on", () => {
+    printJobs(
+      {
+        jobs: [
+          job({ id: "aaaaaaaa-…", status: "running", startedAt: now - 5_000 }),
+          job({ id: "bbbbbbbb-…", status: "queued" }),
+        ],
+      },
+      { color: true },
+    );
+    const lines = output.trimEnd().split("\n");
+    expect(lines[0]).toContain("\x1b[1m");
+    expect(lines[1]).not.toContain("\x1b[1m");
+  });
+
+  it("does NOT bold the first row when a header is present", () => {
+    printJobs(
+      { jobs: [job({ status: "running", startedAt: now - 5_000 })] },
+      { color: true, header: true },
+    );
+    const lines = output.trimEnd().split("\n");
+    expect(lines[0]).not.toContain("\x1b[1m"); // header itself isn't styled
+    expect(lines[1]).not.toContain("\x1b[1m"); // first data row also not bold
   });
 
   it("handles single job payload (mq status <id>)", () => {

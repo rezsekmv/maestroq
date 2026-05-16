@@ -17,6 +17,17 @@ import {
 } from "./rpc-client.js";
 import { defaultConfigPath, initConfig } from "./init.js";
 import { printDevices, printEvent, printJobs } from "./render.js";
+import { DEFAULT_LIMIT, filterJobs, parseLimit, parseSince } from "./since.js";
+import { type ColorMode, resolveUseColor } from "./color.js";
+
+function colorMode(raw: string | boolean | undefined): ColorMode {
+  if (raw === undefined || raw === "" || raw === true) return "auto";
+  if (raw === false) return "never";
+  const s = String(raw).toLowerCase();
+  if (s === "always" || s === "yes" || s === "true" || s === "on") return "always";
+  if (s === "never" || s === "no" || s === "false" || s === "off") return "never";
+  return "auto";
+}
 
 async function callOnce(req: Parameters<Awaited<ReturnType<typeof connect>>["send"]>[0]): Promise<{
   payload?: unknown;
@@ -105,14 +116,18 @@ const daemon = defineCommand({
 
 const devices = defineCommand({
   meta: { name: "devices", description: "List configured devices and their busy state" },
-  args: { json: { type: "boolean", description: "Emit JSON" } },
+  args: {
+    json: { type: "boolean", description: "Emit JSON" },
+    color: { type: "string", description: "auto (default) | always | never" },
+  },
   async run({ args }) {
     const r = await guard(() => callOnce({ op: "devices" }));
     if (args.json) {
       process.stdout.write(`${JSON.stringify(r.payload, null, 2)}\n`);
       return;
     }
-    printDevices(r.payload);
+    const useColor = resolveUseColor(colorMode(args.color));
+    printDevices(r.payload, { color: useColor });
   },
 });
 
@@ -132,23 +147,58 @@ const status = defineCommand({
   args: {
     jobId: { type: "positional", description: "Job id (optional)", required: false },
     json: { type: "boolean", description: "Emit JSON" },
-    header: { type: "boolean", description: "Prepend a column header row" },
+    header: { type: "boolean", alias: "H", description: "Prepend a column header row" },
+    long: {
+      type: "boolean",
+      alias: "l",
+      description: "Detailed view: adds WORKTREE, CREATED, STARTED, EXIT columns",
+    },
+    since: {
+      type: "string",
+      description: "Show jobs created within this duration (default 1h). Examples: 30m, 2h, 1d.",
+    },
+    limit: {
+      type: "string",
+      alias: "n",
+      description: `Cap to the most recent N jobs (default ${DEFAULT_LIMIT}).`,
+    },
+    all: {
+      type: "boolean",
+      alias: "a",
+      description: "Show all jobs (overrides --since and --limit)",
+    },
     watch: {
       type: "string",
       alias: "w",
       description: "Re-render every N seconds (default 2). Pass --watch=5 for 5s.",
     },
+    color: { type: "string", description: "auto (default) | always | never" },
   },
   async run({ args }) {
-    const fetchOnce = async (): Promise<{ payload?: unknown; error?: string }> =>
-      guard(() => callOnce({ op: "status", ...(args.jobId ? { jobId: args.jobId } : {}) }));
+    const filterOpts = args.jobId || args.all
+      ? { sinceMs: null, maxCount: null }
+      : { sinceMs: parseSince(args.since), maxCount: parseLimit(args.limit) };
+
+    const useColor = resolveUseColor(colorMode(args.color));
+
+    const fetchOnce = async (): Promise<{ payload?: unknown; error?: string }> => {
+      const r = await guard(() =>
+        callOnce({ op: "status", ...(args.jobId ? { jobId: args.jobId } : {}) }),
+      );
+      if (filterOpts.sinceMs == null && filterOpts.maxCount == null) return r;
+      return { ...r, payload: filterJobs(r.payload, filterOpts) };
+    };
 
     const renderOnce = (payload: unknown): void => {
       if (args.json) {
         process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
         return;
       }
-      printJobs(payload, { header: Boolean(args.header) });
+      printJobs(payload, {
+        header: Boolean(args.header),
+        long: Boolean(args.long),
+        color: useColor,
+      });
     };
 
     if (args.watch === undefined) {
@@ -184,6 +234,7 @@ function parseWatchInterval(raw: string): number {
   if (!Number.isFinite(n) || n <= 0) return 2_000;
   return Math.max(500, Math.floor(n * 1000));
 }
+
 
 const logs = defineCommand({
   meta: { name: "logs", description: "Print logs for a job; -f to follow" },
