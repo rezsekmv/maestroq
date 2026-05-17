@@ -18,7 +18,7 @@ The original design plan is `/Users/vencel/.claude/plans/hello-here-is-a-federat
 packages/core/    @maestroq/core    — types, JobSpec zod schema, config loader, paths, RPC schema
 packages/daemon/  @maestroq/daemon  — the long-running server (queue, workers, lifecycle, RPC)
 packages/cli/     maestroq          — the `maestroq` binary (citty); `bin.maestroq` → dist/index.js
-examples/         spec YAMLs for darts26 and a vanilla RN project
+examples/         spec YAMLs for a vanilla RN/Expo project
 docs/             architecture / ai-agents / launchd
 .github/workflows ci.yml + release.yml
 ```
@@ -123,7 +123,7 @@ One line in, one or more `RpcEvent` lines out, terminating with `{"kind":"end"}`
 
 Two `maestro test` invocations starting in the same second share `~/Library/Logs/maestro/<YYYY-MM-DD_HHMMSS>/`. The first to finish deletes the dir; the second one's `DebugLogStore.finalizeRun` throws `NoSuchFileException` from `FileUtils.zipDir` and the JVM hangs forever (non-daemon thread holds it open).
 
-Observed twice on maestro 2.5.1, both during parallel iOS + Android runs from darts26.
+Observed twice on maestro 2.5.1, both during parallel iOS + Android runs against a real RN/Expo project.
 
 **Mitigation** (already in `lifecycle/maestro.ts`): we scan stdout for `\b(\d+)/(\d+) Flows (Passed|Failed)\b`. When that sentinel lands, we start a 30 s finalize watchdog. If the child hasn't exited by then, we SIGKILL its pgid and resolve the run using the captured Passed/Failed outcome. `MaestroResult.killedAfterFinalize` reports this happened.
 
@@ -198,8 +198,8 @@ $EDITOR ~/.maestroq/config.yaml
 maestroq daemon stop && sleep 1 && maestroq daemon start > /tmp/maestroq-daemon.log 2>&1 &
 maestroq devices
 
-# 5. Submit specs from a real worktree (darts26).
-cd ~/gitRepos/_home/darts26
+# 5. Submit specs from a real worktree.
+cd ~/path/to/your-rn-app
 IOS=$(maestroq submit maestroq/smoke-ios.yaml)
 AND=$(maestroq submit maestroq/smoke-android.yaml)
 maestroq status --json | python3 -c '...'   # confirm both reach `running` simultaneously
@@ -280,9 +280,6 @@ The very first release is published manually (see the README quick start of this
 
 ## Memory files
 
-The user keeps long-lived facts at `~/.claude/projects/-Users-vencel-gitRepos--home-maestroq/memory/`. Today:
-
-- `feedback-maestro-debug-log-race.md` — the parallel-maestro race + how we mitigate
-- `feedback-maestro-ios-sim-reboot.md` — iOS port 7001 staleness, `rebootSimBefore` is the lever
+The user keeps long-lived facts at `~/.claude/projects/-Users-vencel-gitRepos--home-maestroq/memory/`. Check that directory for the current set — the index lives in `MEMORY.md` next to the entries. Topics covered so far include upstream maestro sharp edges, commit-message preferences, and OSS hygiene rules.
 
 If you discover another upstream sharp edge or a non-obvious convention, save it as a memory rather than relying on AGENTS.md alone — memories persist across conversations and survive AGENTS.md rewrites.

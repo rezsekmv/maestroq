@@ -41,27 +41,22 @@ A job spec is a small YAML file. Look in this order:
 
 If the user has two platforms (iOS + Android), prefer writing two specs and running them in parallel; the daemon will dispatch each to its own device worker.
 
-### darts26-specific notes
+### Regression (full-suite) specs
 
-darts26 already ships specs at `maestroq/smoke-{ios,android}.yaml`. Use them as-is. For regression (the full suite), build a spec referencing every flow dir under `.maestro/e2e/`:
+When the user asks for a full regression run (every flow under `.maestro/`, not just the smoke set), build a spec that references each flow directory explicitly. Example shape:
 
 ```yaml
 platform: ios
 flows:
   - .maestro/e2e/setup
-  - .maestro/e2e/x01
-  - .maestro/e2e/cricket
-  - .maestro/e2e/progressive
-  - .maestro/e2e/result
-  - .maestro/e2e/players
-  - .maestro/e2e/statistics
-  - .maestro/e2e/settings
-  - .maestro/e2e/celebrations
+  - .maestro/e2e/<feature-a>
+  - .maestro/e2e/<feature-b>
+  # …one entry per flow directory the project ships
 build:
   variant: release
   cache: true
 rebootSimBefore: true       # mitigates iOS port-7001 staleness between runs
-label: "darts26 regression iOS"
+label: "regression iOS"
 ```
 
 The same shape with `platform: android` for the Android side (omit `rebootSimBefore`).
@@ -137,5 +132,5 @@ maestroq devices           # which devices are configured and which are busy
 ## Don't do
 
 - Don't call `maestro test` directly — bypasses the queue and races other agents.
-- Don't run `npm run test:e2e:*` from darts26's `package.json` — those scripts predate `maestroq` and use the old `/tmp/darts26-maestro-*-udid` lockfile pattern.
+- Don't run `npm run test:e2e:*` scripts from a project's `package.json` if those scripts call `maestro test` directly — they bypass the queue and race other agents. Convert them to call `maestroq run` instead.
 - Don't auto-start the daemon — `maestroq` deliberately requires the user to start it (so they own its lifetime).
