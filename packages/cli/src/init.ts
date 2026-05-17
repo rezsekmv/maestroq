@@ -53,11 +53,18 @@ export function initConfig(opts: InitOptions): InitResult {
   const config = {
     devices,
     metro: { port_range: [8081, 8089] as [number, number] },
-    defaults: { reboot_sim_before: false, build_cache: true },
+    defaults: { runner: "maestro-runner", reboot_sim_before: false, build_cache: true },
     log_dir: "~/.local/share/maestroq/logs",
     artifact_dir: "~/.local/share/maestroq/artifacts",
   };
-  writeFileSync(opts.configPath, stringifyYaml(config));
+  const header =
+    "# maestroq config\n" +
+    "# defaults.runner: 'maestro-runner' (default) drives tests via the Go binary\n" +
+    "#   from https://github.com/devicelab-dev/maestro-runner and supports parallel\n" +
+    "#   devices on iOS and Android. Set to 'maestro' to fall back to the original\n" +
+    "#   Maestro CLI (https://github.com/mobile-dev-inc/Maestro) — iOS is then capped\n" +
+    "#   at one concurrent job (upstream port 7001 collision).\n";
+  writeFileSync(opts.configPath, header + stringifyYaml(config));
 
   const specsWritten = opts.skipSpecs ? [] : writeStarterSpecs(opts.cwd, discovered);
 

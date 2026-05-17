@@ -177,13 +177,19 @@ export class Worker extends EventEmitter {
       const result = await runMaestro({
         spec: job.spec,
         device: this.device,
+        runner: this.config.defaults.runner,
         artifactDir: jobArtifactDir,
         logSink: sink,
         onChildStart: trackChild,
       });
 
       this.setStatus(job.id, "tearing-down");
-      await teardownJob({ device: this.device, metroHandle, logSink: sink });
+      await teardownJob({
+        device: this.device,
+        runner: this.config.defaults.runner,
+        metroHandle,
+        logSink: sink,
+      });
 
       if (this.cancelled.has(job.id)) {
         this.queue.update(job.id, { finishedAt: Date.now(), exitCode: result.exitCode });
@@ -206,7 +212,12 @@ export class Worker extends EventEmitter {
       const message = err instanceof Error ? err.message : String(err);
       sink(`[error] ${message}`);
       try {
-        await teardownJob({ device: this.device, metroHandle, logSink: sink });
+        await teardownJob({
+          device: this.device,
+          runner: this.config.defaults.runner,
+          metroHandle,
+          logSink: sink,
+        });
       } catch (teardownErr) {
         const teardownMessage =
           teardownErr instanceof Error ? teardownErr.message : String(teardownErr);

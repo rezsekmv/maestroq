@@ -20,7 +20,7 @@ maestroq daemon status
   maestroq daemon start &     # foreground; logs go to stdout
   ```
   or point at `~/gitRepos/_home/maestroq/docs/launchd.md` for the persistent setup.
-- If `maestroq` is not on PATH at all, tell the user `npm i -g maestroq` (or, for local dev, `npm link -w packages/cli` from the `maestroq` repo).
+- If `maestroq` is not on PATH at all, tell the user `npm i -g maestroq` (or, for local dev, `npm link -w packages/cli` from the `maestroq` repo). The default test engine is `maestro-runner` — install it from [devicelab-dev/maestro-runner](https://github.com/devicelab-dev/maestro-runner) (or set `defaults.runner: maestro` in `~/.maestroq/config.yaml` to fall back to the original Maestro CLI).
 
 ## 2. Pick / build a job spec
 
@@ -41,7 +41,7 @@ A job spec is a small YAML file. Look in this order:
 
 3. Legacy `<cwd>/maestroq/*.yaml` — older projects. Encourage migrating to `.maestro/`, but specs there still work if the path is passed explicitly.
 
-If the user has two platforms (iOS + Android), prefer writing two specs and running them in parallel; the daemon will dispatch each to its own device worker (subject to the iOS cap below).
+If the user has two platforms (iOS + Android), prefer writing two specs and running them in parallel; the daemon will dispatch each to its own device worker.
 
 ### Per-project defaults (optional)
 
@@ -54,24 +54,24 @@ defaults:
   build: { variant: release, cache: true }
 ```
 
-### Regression (full-suite) specs
+### Regression / full-suite specs
 
-When the user asks for a full regression run (every flow under `.maestro/`, not just the smoke set), build a spec that references each flow directory explicitly. Example shape:
+Reference every flow dir under `.maestro/`:
 
 ```yaml
 platform: ios
 flows:
   - .maestro/e2e/setup
-  - .maestro/e2e/<feature-a>
-  - .maestro/e2e/<feature-b>
-  # …one entry per flow directory the project ships
+  - .maestro/e2e/feature-a
+  - .maestro/e2e/feature-b
+  # …
 build:
   variant: release
   cache: true
 label: "regression iOS"
 ```
 
-The same shape with `platform: android` for the Android side.
+Same shape with `platform: android` for the Android side.
 
 ## 3. Submit the job
 
@@ -80,7 +80,7 @@ Two modes — pick based on what the user asked for:
 **Synchronous (default — they want a green/red verdict now):**
 
 ```bash
-maestroq run .maestro/<spec>.yaml      # or shorthand: maestroq run <spec>
+maestroq run .maestro/smoke-ios.yaml   # or shorthand: maestroq run smoke-ios
 ```
 
 `maestroq run` blocks, streams logs, and **exits with the underlying Maestro exit code**. Use this when the user wants results before continuing. The agent should branch on `$?`.
@@ -90,7 +90,7 @@ maestroq run .maestro/<spec>.yaml      # or shorthand: maestroq run <spec>
 **Async / fire-and-forget (they'll come back later, or you have other work to do):**
 
 ```bash
-JOB=$(maestroq submit .maestro/<spec>.yaml)
+JOB=$(maestroq submit .maestro/smoke-ios.yaml)
 echo "submitted $JOB"
 # … other work …
 maestroq logs "$JOB" -f   # blocks until terminal, exits with job code
@@ -104,9 +104,13 @@ maestroq run .maestro/smoke-android.yaml & \
 wait
 ```
 
-Each `maestroq run` claims one device. The daemon dispatches them concurrently. If two jobs target the same platform from different worktrees, the second one queues and starts when the first finishes.
+Each `maestroq run` claims one device. The daemon dispatches them concurrently. If two jobs target the same platform from different worktrees, the second one queues and starts when the first finishes (unless multiple devices of that platform are configured — see below).
 
-**iOS is capped at one concurrent job.** Upstream `maestro test` hardcodes the iOS driver host port, so two iOS sims can't run simultaneously. The dispatcher enforces this via `defaults.max_concurrent_ios` (default `1`) in `~/.maestroq/config.yaml` — extra iOS jobs queue instead of failing on port collisions. Android stays fully parallel.
+By default maestroq uses the [`maestro-runner`](https://github.com/devicelab-dev/maestro-runner) engine, which supports parallel iOS *and* parallel Android — submit as many iOS specs as you have configured sims. If `defaults.runner: maestro` is set in `~/.maestroq/config.yaml` (the legacy [Maestro CLI](https://github.com/mobile-dev-inc/Maestro)), iOS is capped at one concurrent job because upstream `maestro test` hardcodes the iOS driver host port; extra iOS jobs queue.
+
+### Multiple iOS devices in parallel
+
+Configure N iOS sims in `~/.maestroq/config.yaml`. Under the default `runner: maestro-runner`, submit two iOS specs and both will reach `running` simultaneously. Under `runner: maestro`, only one runs at a time regardless of how many sims you list — extra iOS jobs queue until the first finishes.
 
 ## 4. Watching / inspecting
 
@@ -134,9 +138,9 @@ maestroq devices           # which devices are configured and which are busy
 
 ### Known sharp edges (already mitigated, but worth recognizing)
 
-- **iOS "Failed to connect to /127.0.0.1:7001"** during install → leftover xctest-runners from a previous Maestro session. The daemon now `pkill`s these on teardown (scoped to the UDID), so this should be rare. If it still happens, fall back to `rebootSimBefore: true` on the spec — the older, more expensive (~30 s) mitigation.
-- **Job stuck in `running` long after `N/N Flows Passed` shows in the log** → the daemon handles this via a 30 s finalize watchdog (SIGKILLs the JVM). If you see this without resolution, file an issue.
-- **Two iOS jobs submitted but only one running** → expected. Upstream maestro can't parallel-iOS on one Mac; the cap serializes them.
+- *Under `runner: maestro` only —* **iOS "Failed to connect to /127.0.0.1:7001"** during install → leftover xctest-runners from a previous Maestro session. The daemon `pkill`s these on teardown (scoped to the UDID), so this should be rare. If it still happens, fall back to `rebootSimBefore: true` on the spec — the older, more expensive (~30 s) mitigation. `maestro-runner` is unaffected (different driver architecture).
+- *Under `runner: maestro` only —* **Job stuck in `running` long after `N/N Flows Passed` shows in the log** → the daemon handles this via a 30 s finalize watchdog (SIGKILLs the JVM). If you see this without resolution, file an issue. `maestro-runner` has no JVM and no such race.
+- *Under `runner: maestro` only —* **Two iOS jobs submitted but only one running** → expected, upstream maestro can't parallel-iOS. Switch to `runner: maestro-runner` (the default) if you need parallel iOS.
 
 ## 6. When something is wrong
 
@@ -148,6 +152,6 @@ maestroq devices           # which devices are configured and which are busy
 
 ## Don't do
 
-- Don't call `maestro test` directly — bypasses the queue and races other agents.
-- Don't run `npm run test:e2e:*` scripts from a project's `package.json` if those scripts call `maestro test` directly — they bypass the queue and race other agents. Convert them to call `maestroq run` instead.
+- Don't call `maestro test` or `maestro-runner test` directly — bypasses the queue and races other agents.
+- Don't run project-local `npm run test:e2e:*` scripts that predate `maestroq` and use ad-hoc lockfiles — submit through `maestroq` instead.
 - Don't auto-start the daemon — `maestroq` deliberately requires the user to start it (so they own its lifetime).

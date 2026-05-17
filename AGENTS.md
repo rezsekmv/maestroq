@@ -83,6 +83,15 @@ queued → building → installing → metro-starting? → running → tearing-d
 
 Status enum is in `packages/core/src/job-spec.ts` — `JobStatusSchema`, `ActiveStatuses`, `TerminalStatuses`.
 
+### Runners
+
+Two test engines are supported, selected by `defaults.runner` in `~/.maestroq/config.yaml`:
+
+- **`maestro-runner`** (default) — [`devicelab-dev/maestro-runner`](https://github.com/devicelab-dev/maestro-runner). Single Go binary, per-UDID dynamic WDA ports (8100–9099, computed in their `pkg/driver/wda/runner.go`), Appium-vendored WebDriverAgent. Supports parallel iOS *and* parallel Android out of the box.
+- **`maestro`** — the original [Maestro CLI](https://github.com/mobile-dev-inc/Maestro). JVM-based. Hardcodes the iOS driver host port 7001 → iOS is capped at one concurrent job; subject to the upstream DebugLogStore.finalizeRun race → needs the 30 s finalize watchdog in `lifecycle/maestro.ts`.
+
+`lifecycle/maestro.ts` branches on the runner: maestro-runner gets `--device`/`--platform`/`--output` and skips the watchdog; maestro keeps the legacy `--udid`/`--debug-output` invocation + watchdog. The dispatcher's `max_concurrent_ios` cap is bypassed under `maestro-runner` and honored under `maestro`. `lifecycle/teardown.ts` only runs the iOS pkill sweep under `maestro` (the leftover xctest-runner process names are Maestro CLI-specific).
+
 ---
 
 ## Invariants — break these and the daemon breaks
@@ -121,6 +130,8 @@ One line in, one or more `RpcEvent` lines out, terminating with `{"kind":"end"}`
 
 ### Maestro CLI debug-log race
 
+*Under `runner: maestro` only.* `maestro-runner` has no JVM and a different artifact layout, so this race does not exist there.
+
 Two `maestro test` invocations starting in the same second share `~/Library/Logs/maestro/<YYYY-MM-DD_HHMMSS>/`. The first to finish deletes the dir; the second one's `DebugLogStore.finalizeRun` throws `NoSuchFileException` from `FileUtils.zipDir` and the JVM hangs forever (non-daemon thread holds it open).
 
 Observed twice on maestro 2.5.1, both during parallel iOS + Android runs against a real RN/Expo project.
@@ -133,15 +144,19 @@ If maestro upstream fixes this, the watchdog can become a no-op or be removed.
 
 ### iOS port 7001 staleness
 
+*Under `runner: maestro` only.* `maestro-runner` uses Appium's WebDriverAgent vendored in-tree and per-UDID dynamic ports — it doesn't spawn `maestro-driver-iosUITests-Runner` or `xcodebuild test-without-building`, so this staleness pattern doesn't apply. `teardown.ts` skips the iOS pkill sweep under `maestro-runner`.
+
 After a `maestro test` run on iOS, the `maestro-driver-iosUITests-Runner` and `xcodebuild test-without-building` helpers can linger past the parent CLI exit. They hold port 7001 stale. The next iOS run dies during install with `Failed to connect to /127.0.0.1:7001`.
 
 **Mitigation 1 (default):** `teardownJob` calls `cleanupIosLeftovers(udid, ...)` in `lifecycle/cleanup-ios.ts`, which `pkill -f`s the two leftover patterns scoped to the just-used UDID. Cheap, runs on every iOS job including the cancel path.
 
 **Mitigation 2 (fallback):** `JobSpec.rebootSimBefore: true` runs `simctl shutdown` + `bootstatus` (see `lifecycle/boot.ts`). Expensive (~30 s) — keep as a knob for projects where the pkill isn't catching something, but it should no longer be the default.
 
-### Parallel iOS is capped at one
+### Parallel iOS is capped at one (under `runner: maestro`)
 
-Upstream `maestro test` hardcodes the host driver port (7001) and the WDA port — two iOS sims on the same Mac will collide regardless of which UDIDs are configured. The dispatcher honors `config.defaults.max_concurrent_ios` (default `1`) by counting busy iOS workers in `tick()` and skipping idle iOS workers when the cap is reached (`dispatcher.ts`). Android stays fully parallel. Re-evaluate when upstream maestro exposes a port flag (today it doesn't; `maestro-runner`, a community Go fork, may or may not — verify before depending on it).
+*Bypassed under the default `runner: maestro-runner` — the dispatcher's `tick()` treats `iosCap` as `Infinity` in that case.*
+
+Upstream `maestro test` hardcodes the host driver port (7001) and the WDA port — two iOS sims on the same Mac will collide regardless of which UDIDs are configured. Under `runner: maestro`, the dispatcher honors `config.defaults.max_concurrent_ios` (default `1`) by counting busy iOS workers in `tick()` and skipping idle iOS workers when the cap is reached (`dispatcher.ts`). Android stays fully parallel. Under `runner: maestro-runner`, every configured iOS worker dispatches; `max_concurrent_ios` is ignored (a startup log line notes this when the user has set a non-default value).
 
 ### Cancel must escalate
 

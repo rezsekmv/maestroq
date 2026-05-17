@@ -46,6 +46,7 @@ exec sleep 600
     const result = await runMaestro({
       spec,
       device: { udid: "fake-udid", platform: "ios" },
+      runner: "maestro",
       artifactDir: join(dir, "artifacts"),
       logSink: () => undefined,
       onChildStart: () => undefined,
@@ -66,6 +67,7 @@ exec sleep 600
     const result = await runMaestro({
       spec,
       device: { udid: "fake-udid", platform: "ios" },
+      runner: "maestro",
       artifactDir: join(dir, "artifacts"),
       logSink: () => undefined,
       onChildStart: () => undefined,
@@ -83,6 +85,7 @@ exit 0
     const result = await runMaestro({
       spec,
       device: { udid: "fake-udid", platform: "ios" },
+      runner: "maestro",
       artifactDir: join(dir, "artifacts"),
       logSink: () => undefined,
       onChildStart: () => undefined,

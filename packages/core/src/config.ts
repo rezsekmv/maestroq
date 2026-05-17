@@ -12,6 +12,9 @@ export const DeviceConfigSchema = z.object({
 });
 export type DeviceConfig = z.infer<typeof DeviceConfigSchema>;
 
+export const RunnerSchema = z.enum(["maestro-runner", "maestro"]);
+export type Runner = z.infer<typeof RunnerSchema>;
+
 export const ConfigSchema = z.object({
   devices: z.array(DeviceConfigSchema).default([]),
   metro: z
@@ -23,11 +26,17 @@ export const ConfigSchema = z.object({
     .default({ port_range: [8081, 8089] }),
   defaults: z
     .object({
+      runner: RunnerSchema.default("maestro-runner"),
       reboot_sim_before: z.boolean().default(false),
       build_cache: z.boolean().default(true),
       max_concurrent_ios: z.number().int().positive().default(1),
     })
-    .default({ reboot_sim_before: false, build_cache: true, max_concurrent_ios: 1 }),
+    .default({
+      runner: "maestro-runner",
+      reboot_sim_before: false,
+      build_cache: true,
+      max_concurrent_ios: 1,
+    }),
   log_dir: z.string().default("~/.local/share/maestroq/logs"),
   artifact_dir: z.string().default("~/.local/share/maestroq/artifacts"),
 });

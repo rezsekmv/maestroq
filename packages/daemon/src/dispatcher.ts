@@ -23,6 +23,15 @@ export class Dispatcher extends EventEmitter {
       });
       return w;
     });
+    if (
+      this.config.defaults.runner === "maestro-runner" &&
+      this.config.defaults.max_concurrent_ios !== 1
+    ) {
+      logger.info(
+        { max_concurrent_ios: this.config.defaults.max_concurrent_ios },
+        "max_concurrent_ios ignored under runner=maestro-runner (every configured iOS device runs in parallel)",
+      );
+    }
   }
 
   start(): void {
@@ -30,10 +39,12 @@ export class Dispatcher extends EventEmitter {
   }
 
   tick(): void {
-    // Upstream maestro hardcodes the iOS driver host port (7001), so two iOS sims
-    // can't run maestro concurrently on the same Mac. Serialize iOS at the
-    // dispatcher level — Android stays fully parallel.
-    const iosCap = this.config.defaults.max_concurrent_ios;
+    // The iOS cap exists because the legacy `maestro` CLI hardcodes the iOS
+    // driver host port (7001) — two `maestro test` invocations collide on
+    // the same Mac regardless of UDID. maestro-runner uses per-UDID dynamic
+    // WDA ports, so the cap is bypassed under that runner.
+    const capIos = this.config.defaults.runner === "maestro";
+    const iosCap = capIos ? this.config.defaults.max_concurrent_ios : Infinity;
     let iosBusy = this.workers.filter((w) => w.platform === "ios" && w.isBusy()).length;
     for (const w of this.workers) {
       if (w.isBusy()) continue;
