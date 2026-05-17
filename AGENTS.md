@@ -221,6 +221,54 @@ If a user asks for one of these and it's genuinely needed, raise it and update t
 
 ---
 
+## Releasing (Changesets)
+
+This repo uses [Changesets](https://github.com/changesets/changesets) to manage versions and publish to npm. **Every user-facing change ships with a changeset file.**
+
+### Adding a changeset to your PR
+
+If your change affects any published package (`@maestroq/core`, `@maestroq/daemon`, or `maestroq`), run:
+
+```bash
+npx changeset
+```
+
+It asks which packages changed, picks a bump level (`patch` / `minor` / `major`), and prompts for a one-line description that ends up in the changelog. The result is a `.changeset/<random-name>.md` file. **Commit it with the code change in the same PR.**
+
+If your change is internal only (tests, build config, docs, this file) — skip the changeset. The release workflow tolerates PRs without one.
+
+### What happens after merge
+
+The `.github/workflows/release.yml` workflow watches `main`:
+
+1. **If pending changesets exist**, it opens (or updates) a "chore: version packages" PR that:
+   - bumps the `version` field in every affected `package.json`,
+   - regenerates `CHANGELOG.md` per package,
+   - removes the consumed `.changeset/*.md` files.
+2. **When the maintainer merges that PR**, the same workflow re-runs and this time runs `npx changeset publish` — which tags the commit, publishes each package to npm with `--provenance`, and creates a GitHub release.
+
+You never tag or `npm publish` manually after v0.1.0.
+
+### Configuration
+
+`.changeset/config.json`:
+
+- `fixed: [["@maestroq/core", "@maestroq/daemon", "maestroq"]]` — all three packages always bump to the same version. If you only touched core, daemon and cli still get the bump. This is deliberate: the three are co-versioned because the daemon/cli are tightly coupled.
+- `access: "public"` — required for scoped packages on the npm free tier.
+- `updateInternalDependencies: "patch"` — Changesets bumps the cross-package `"@maestroq/core": "^x.y.z"` entries automatically.
+
+### When releasing breaks
+
+- **"NPM_TOKEN not set"** — the secret is missing in repo settings. Generate a new automation token at npmjs.com → Access Tokens, set it as `NPM_TOKEN` under Settings → Secrets and variables → Actions.
+- **"You cannot publish over the previously published versions"** — someone manually published the same version. Bump again and re-run.
+- **The Version PR never opens** — there are no changesets in `.changeset/`. Did the merging PR include one?
+
+### v0.1.0 is the seed
+
+The very first release is published manually (see the README quick start of this repo's history) because there's nothing for Changesets to "bump" yet. From v0.1.1 onward, the flow above is the only path.
+
+---
+
 ## When you hit something weird
 
 1. Check `~/.maestroq/queue.json` — that's the source of truth for job state.
