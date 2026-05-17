@@ -7,7 +7,7 @@
 
 ## Why maestroq?
 
-Maestro can only drive one simulator or emulator at a time. The moment two AI agents — or two git worktrees, or a developer plus a CI job — share a Mac, they race the device. Tests interleave, installs collide, port 7001 goes stale.
+Maestro can only drive one simulator or emulator at a time. Without a queue you end up manually waiting for the previous run to finish before you can start the next one — polling "is it done yet?", or worse, kicking off a second run mid-install and watching both crash. The moment two AI agents — or two git worktrees, or a developer plus a CI job — share a Mac, the problem multiplies: tests interleave, installs collide, port 7001 goes stale.
 
 Existing options force a tradeoff: Maestro Cloud is paid and remote, Detox couples to Jest, a bash lockfile gives you no queue / no logs / no cancel.
 
@@ -15,19 +15,50 @@ Existing options force a tradeoff: Maestro Cloud is paid and remote, Detox coupl
 
 ## Getting started
 
+### Install
+
 ```bash
-# 1. install
 npm i -g maestroq
-
-# 2. start the daemon (or install it as a service — see docs/launchd.md)
-mq daemon start &
-
-# 3. point it at the devices you want it to own
-xcrun simctl list devices booted              # grab the iOS UDID
-adb devices                                    # grab the Android emulator id
-$EDITOR ~/.maestroq/config.yaml                # add them
-mq daemon stop && mq daemon start &            # reload config
 ```
+
+### Startup
+
+Start the daemon (or install it as a service — see [`docs/launchd.md`](docs/launchd.md)):
+
+```bash
+mq daemon start &
+```
+
+### Configure
+
+Scaffold the config, then fill in the devices you want the daemon to own:
+
+```bash
+mq init                               # writes ~/.maestroq/config.yaml
+xcrun simctl list devices booted      # grab the iOS UDID
+adb devices                            # grab the Android emulator id
+$EDITOR ~/.maestroq/config.yaml        # paste them in
+mq daemon stop && mq daemon start &    # reload config
+```
+
+If your project already has `test:e2e:*` scripts in `package.json`, `mq init --from-package-json` seeds placeholder device entries based on which platforms it sees.
+
+#### `config.yaml` reference
+
+| Key                              | Type                 | Default                                | What it does |
+| -------------------------------- | -------------------- | -------------------------------------- | ------------ |
+| `devices[].udid`                 | string (required)    | —                                      | Simulator UDID (`xcrun simctl list devices booted`) or emulator id (`adb devices`). |
+| `devices[].platform`             | `ios` \| `android`   | —                                      | Which worker pool this device joins. |
+| `devices[].label`                | string               | —                                      | Human-readable name shown in `mq devices`. |
+| `devices[].avdName`              | string               | —                                      | Android only. The AVD name passed to `emulator -avd`; needed when the daemon has to cold-boot the emulator. |
+| `metro.port_range`               | `[number, number]`   | `[8081, 8089]`                         | Inclusive port range the daemon allocates from for Metro (dev-client jobs). |
+| `defaults.reboot_sim_before`     | boolean              | `false`                                | Per-job default for `rebootSimBefore` (mitigates iOS port-7001 staleness). |
+| `defaults.build_cache`           | boolean              | `true`                                 | Per-job default for `build.cache`. Auto-bypassed when the working tree is dirty. |
+| `log_dir`                        | string (path)        | `~/.local/share/maestroq/logs`         | Per-job log file directory. `~` is expanded. |
+| `artifact_dir`                   | string (path)        | `~/.local/share/maestroq/artifacts`    | Maestro `--output` artifact directory. `~` is expanded. |
+
+
+### Run
 
 Drop a spec next to your `.maestro/` flows:
 
@@ -51,28 +82,6 @@ mq cancel <id>                      # SIGTERM the worker's child group
 ```
 
 That's it. Multiple worktrees or agents can submit the same way — the daemon FIFOs per device, runs across devices in parallel.
-
-## The killer demo
-
-Two worktrees, both submitting iOS + Android in parallel:
-
-```
-ID       WORKTREE     PLAT    STATUS      CREATED  STARTED  DUR     EXIT
-17aad925 darts26      ios     succeeded   6m47s    6m47s    86.0s   0
-03deb076 darts26      android succeeded   6m47s    6m47s    110.6s  0
-ab2079e3 my-feature   ios     succeeded   6m47s    5m21s    87.1s   0
-9d5b7412 my-feature   android succeeded   6m46s    4m56s    85.4s   0
-```
-
-`darts26` and `my-feature` started their iOS jobs at the same instant; `my-feature`'s iOS started *exactly* when `darts26`'s iOS finished. Same for Android. No agent had to know about the others.
-
-## Wiring AI agents
-
-`mq run` is a drop-in for `maestro test`: it blocks, streams logs, exits with the underlying exit code. Tell your agent:
-
-> Run Maestro flows via `mq run <spec.yaml>`, not `maestro test`. If the daemon isn't running, surface the one-line hint and ask the human to start it.
-
-See [`AGENTS.md`](AGENTS.md) for the full architectural guide for contributors.
 
 ## Docs
 

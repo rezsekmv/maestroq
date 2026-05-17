@@ -313,16 +313,32 @@ const init = defineCommand({
   args: {
     "from-package-json": {
       type: "boolean",
-      description: "Seed devices from the current dir's package.json scripts",
+      description: "Fall back to seeding placeholder devices from package.json scripts",
+    },
+    "no-discover": {
+      type: "boolean",
+      description: "Skip auto-discovering booted simulators/emulators on the host",
+    },
+    "no-specs": {
+      type: "boolean",
+      description: "Skip scaffolding maestroq/smoke-<platform>.yaml when .maestro/ exists",
     },
   },
   async run({ args }) {
-    const message = initConfig({
+    const result = initConfig({
       cwd: process.cwd(),
       fromPackageJson: Boolean(args["from-package-json"]),
       configPath: defaultConfigPath(),
+      skipDiscover: Boolean(args["no-discover"]),
+      skipSpecs: Boolean(args["no-specs"]),
     });
-    process.stdout.write(`${message}\n`);
+    process.stdout.write(`${result.message}\n`);
+    for (const d of result.discovered) {
+      process.stdout.write(`  - ${d.platform.padEnd(8)} ${d.udid}  ${d.label ?? ""}\n`);
+    }
+    for (const s of result.specsWritten) {
+      process.stdout.write(`  + spec ${s}\n`);
+    }
   },
 });
 
