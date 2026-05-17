@@ -15,11 +15,11 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
-    "@types/node": "^22.19.19",
+    "@types/node": "^24.0.0",
     "@types/proper-lockfile": "^4.1.4",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"

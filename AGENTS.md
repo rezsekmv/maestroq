@@ -23,7 +23,7 @@ docs/             architecture / ai-agents / launchd
 .github/workflows ci.yml + release.yml
 ```
 
-Monorepo via **npm workspaces**. ESM (`"type": "module"`), Node 22+, TypeScript strict with `noUncheckedIndexedAccess` on.
+Monorepo via **npm workspaces**. ESM (`"type": "module"`), Node 24+, TypeScript strict with `noUncheckedIndexedAccess` on.
 
 Three packages, three `tsconfig.json` files extending `tsconfig.base.json`. Daemon and cli reference core via project references; the root `tsconfig.json` references all three.
 
