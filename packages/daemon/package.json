@@ -1,6 +1,6 @@
 {
   "name": "@maestroq/daemon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc -b",
@@ -19,7 +19,7 @@
     "dist"
   ],
   "dependencies": {
-    "@maestroq/core": "^0.1.0",
+    "@maestroq/core": "^0.2.0",
     "execa": "^9.6.1",
     "pino": "^9.14.0",
     "proper-lockfile": "^4.1.2",
