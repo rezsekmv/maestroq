@@ -5,6 +5,8 @@
 [![CI](https://github.com/rezsekmv/maestroq/actions/workflows/ci.yml/badge.svg)](https://github.com/rezsekmv/maestroq/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+_Independent OSS project. Not affiliated with, sponsored by, or endorsed by mobile.dev or Maestro._
+
 ## Why maestroq?
 
 Maestro can only drive one simulator or emulator at a time. Without a queue you end up manually waiting for the previous run to finish before you can start the next one — polling "is it done yet?", or worse, kicking off a second run mid-install and watching both crash. The moment two AI agents — or two git worktrees, or a developer plus a CI job — share a Mac, the problem multiplies: tests interleave, installs collide, port 7001 goes stale.
