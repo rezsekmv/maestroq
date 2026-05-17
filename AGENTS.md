@@ -174,9 +174,10 @@ Per-project specs and per-project config live under `.maestro/` at the project r
 
 ### Commits
 
-Per `/Users/vencel/.claude/CLAUDE.md`: **never sign commits with a `Co-Authored-By: Claude …` line**. The user's git config identity is the only author.
-
-For larger changes, the global rule says to run `coderabbit review --plain`. The user's call when to do that — don't volunteer.
+- **Conventional Commits.** Subject: `<type>: <imperative summary>` (or `<type>(<scope>): …`). Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`. Bump level still comes from the `.changeset/*.md` file — the prefix is for readability, not versioning.
+- **Keep it short.** Subject ≤ 60 chars. Body only when the *why* isn't obvious from the diff. No multi-paragraph rationale — that belongs in the changeset or PR description.
+- **Never sign commits with a `Co-Authored-By: Claude …` line** (per `/Users/vencel/.claude/CLAUDE.md`). The user's git config identity is the only author.
+- For larger changes, the global rule says to run `coderabbit review --plain`. The user's call when to do that — don't volunteer.
 
 ### Code style
 
