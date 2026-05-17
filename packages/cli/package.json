@@ -2,7 +2,8 @@
   "name": "maestroq",
   "version": "0.1.0",
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "prepublishOnly": "bash ../../scripts/sync-readme.sh"
   },
   "license": "MIT",
   "type": "module",

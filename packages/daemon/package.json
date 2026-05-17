@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "main": "./dist/index.js",
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "prepublishOnly": "bash ../../scripts/sync-readme.sh"
   },
   "license": "MIT",
   "type": "module",
