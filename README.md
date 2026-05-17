@@ -13,21 +13,26 @@ Existing options force a tradeoff: Maestro Cloud is paid and remote, Detox coupl
 
 `maestroq` is one daemon per machine. It owns the local sim/emulator pool, FIFOs jobs per device, and dispatches work from any worktree over a Unix socket — so N agents on one Mac stops being a foot gun.
 
-## Install
+## Getting started
 
 ```bash
+# 1. install
 npm i -g maestroq
+
+# 2. start the daemon (or install it as a service — see docs/launchd.md)
 mq daemon start &
-$EDITOR ~/.maestroq/config.yaml      # add your iOS UDID + Android emulator id
+
+# 3. point it at the devices you want it to own
+xcrun simctl list devices booted              # grab the iOS UDID
+adb devices                                    # grab the Android emulator id
+$EDITOR ~/.maestroq/config.yaml                # add them
+mq daemon stop && mq daemon start &            # reload config
 ```
 
-See [`docs/launchd.md`](docs/launchd.md) for installing the daemon as a service.
-
-## Use
-
-A job spec is a small YAML file:
+Drop a spec next to your `.maestro/` flows:
 
 ```yaml
+# maestroq/smoke-ios.yaml
 platform: ios
 flows: [.maestro/e2e/smoke]
 build: { variant: release, cache: true }
@@ -35,13 +40,17 @@ rebootSimBefore: true
 label: smoke iOS
 ```
 
+And run it:
+
 ```bash
-mq run maestroq/smoke-ios.yaml      # blocks, streams logs, exits with the maestro code
+mq run    maestroq/smoke-ios.yaml   # blocks, streams logs, exits with the maestro code
 mq submit maestroq/smoke-ios.yaml   # async — prints the job id and returns
 mq status -lH -w                    # live queue (long view, header, watch)
-mq logs <id> -f
-mq cancel <id>
+mq logs   <id> -f                   # follow a job's log
+mq cancel <id>                      # SIGTERM the worker's child group
 ```
+
+That's it. Multiple worktrees or agents can submit the same way — the daemon FIFOs per device, runs across devices in parallel.
 
 ## The killer demo
 
