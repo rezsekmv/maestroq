@@ -138,7 +138,7 @@ describe("printJobs colors", () => {
     expect(output).not.toContain("\x1b[1m");
   });
 
-  it("handles single job payload (mq status <id>)", () => {
+  it("handles single job payload (maestroq status <id>)", () => {
     printJobs({ jobs: job() });
     const lines = output.trimEnd().split("\n");
     expect(lines).toHaveLength(1);

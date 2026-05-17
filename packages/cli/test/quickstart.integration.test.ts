@@ -37,7 +37,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<voi
 
 beforeAll(async () => {
   if (!existsSync(MQ)) {
-    throw new Error(`mq binary missing at ${MQ}. Run \`npm run build\` first.`);
+    throw new Error(`maestroq binary missing at ${MQ}. Run \`npm run build\` first.`);
   }
   HOME = mkdtempSync(join(tmpdir(), "mq-quickstart-"));
   mkdirSync(join(HOME, ".maestroq"), { recursive: true });
@@ -78,7 +78,7 @@ describe("README quick start (integration)", () => {
     expect(devices.status).toBe(2);
   });
 
-  it("step 1 — `mq daemon start` brings the daemon up", async () => {
+  it("step 1 — `maestroq daemon start` brings the daemon up", async () => {
     daemonProc = spawn("node", [MQ, "daemon", "start"], {
       env: { ...process.env, HOME, MAESTROQ_LOG_LEVEL: "silent" },
       stdio: "ignore",
@@ -93,7 +93,7 @@ describe("README quick start (integration)", () => {
     expect(status.status).toBe(0);
   });
 
-  it("step 2 — `mq devices` lists everything in config.yaml", () => {
+  it("step 2 — `maestroq devices` lists everything in config.yaml", () => {
     const r = mq(["devices"]);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("FAKE-IOS-UDID");
@@ -102,13 +102,13 @@ describe("README quick start (integration)", () => {
     expect(r.stdout).toMatch(/android\s+fake-emulator-5554\s+.*idle/);
   });
 
-  it("step 3 — `mq status` is empty on a fresh queue", () => {
+  it("step 3 — `maestroq status` is empty on a fresh queue", () => {
     const r = mq(["status"]);
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/no jobs/);
   });
 
-  it("step 3b — `mq status --json` returns structured empty output", () => {
+  it("step 3b — `maestroq status --json` returns structured empty output", () => {
     const r = mq(["status", "--json"]);
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout) as { jobs: unknown[] };
@@ -116,7 +116,7 @@ describe("README quick start (integration)", () => {
     expect(parsed.jobs).toHaveLength(0);
   });
 
-  it("step 4 — `mq daemon stop` tears it down cleanly", async () => {
+  it("step 4 — `maestroq daemon stop` tears it down cleanly", async () => {
     const stop = mq(["daemon", "stop"]);
     expect(stop.status).toBe(0);
 

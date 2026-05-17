@@ -3,7 +3,7 @@
 ## Processes
 
 - **Daemon** (`maestroq daemon`): one long-running Node process per machine.
-- **CLI client** (`mq`): a thin RPC client. Connects to the daemon over a Unix socket at `~/.maestroq/daemon.sock` (file perms `0600`).
+- **CLI client** (`maestroq`): a thin RPC client. Connects to the daemon over a Unix socket at `~/.maestroq/daemon.sock` (file perms `0600`).
 - **External children**: `npx expo run:*`, `npx expo start`, `maestro test`, `xcrun simctl`, `adb`, `emulator`. Spawned by the daemon with `detached: true` so each child is the leader of its own process group — descendants ride along.
 
 ## State on disk
@@ -12,7 +12,7 @@
 | ------------------------------------- | ------ | -------------------------------------------------------------- |
 | `~/.maestroq/config.yaml`             | user   | Device list, port range, defaults.                             |
 | `~/.maestroq/daemon.sock`             | daemon | RPC socket (mode `0600`).                                      |
-| `~/.maestroq/daemon.pid`              | daemon | PID file (used by `mq daemon status`).                         |
+| `~/.maestroq/daemon.pid`              | daemon | PID file (used by `maestroq daemon status`).                         |
 | `~/.maestroq/queue.json`              | daemon | Authoritative job state (atomic write).                        |
 | `~/.local/share/maestroq/logs/<id>.log`     | daemon | Per-job stdout/stderr.                                   |
 | `~/.local/share/maestroq/artifacts/<id>/`   | daemon | Maestro `--output` artifacts.                           |
@@ -81,6 +81,6 @@ This is exercised by verification step 6 in the original plan.
 
 ## RPC protocol
 
-Newline-delimited JSON over the Unix socket. Each request from `mq` is one line; the daemon answers with one or more `RpcEvent`s and a final `{"kind":"end"}` (or keeps streaming `log` events when `follow: true`).
+Newline-delimited JSON over the Unix socket. Each request from `maestroq` is one line; the daemon answers with one or more `RpcEvent`s and a final `{"kind":"end"}` (or keeps streaming `log` events when `follow: true`).
 
 Schemas live in [`packages/core/src/rpc.ts`](../packages/core/src/rpc.ts) and are validated with zod on both ends. The protocol is not stable until v1.0.

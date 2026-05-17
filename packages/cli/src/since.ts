@@ -5,7 +5,7 @@ export function parseSince(raw: string | undefined): number {
   if (!raw) return DEFAULT_SINCE_MS;
   const m = /^(\d+(?:\.\d+)?)\s*(s|m|h|d)?$/.exec(raw.trim());
   if (!m) {
-    process.stderr.write(`[mq] invalid --since "${raw}", using default 1h\n`);
+    process.stderr.write(`[maestroq] invalid --since "${raw}", using default 1h\n`);
     return DEFAULT_SINCE_MS;
   }
   const value = Number(m[1]);
@@ -19,7 +19,7 @@ export function parseLimit(raw: string | undefined): number {
   if (!raw) return DEFAULT_LIMIT;
   const n = Number(raw);
   if (!Number.isInteger(n) || n <= 0) {
-    process.stderr.write(`[mq] invalid --limit "${raw}", using default ${DEFAULT_LIMIT}\n`);
+    process.stderr.write(`[maestroq] invalid --limit "${raw}", using default ${DEFAULT_LIMIT}\n`);
     return DEFAULT_LIMIT;
   }
   return n;

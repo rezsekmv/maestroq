@@ -278,7 +278,7 @@ const run = defineCommand({
     const spec = loadSpec(args.spec);
     const submission = await guard(() => callOnce({ op: "submit", spec }));
     const jobId = (submission.payload as { jobId: string }).jobId;
-    process.stderr.write(`[mq] submitted ${jobId}\n`);
+    process.stderr.write(`[maestroq] submitted ${jobId}\n`);
 
     const client = await guardClient();
     let exitCode = 0;
@@ -360,7 +360,7 @@ const config = defineCommand({
 });
 
 const main = defineCommand({
-  meta: { name: "mq", description: "maestroq CLI client", version: "0.1.0" },
+  meta: { name: "maestroq", description: "maestroq CLI client", version: "0.1.0" },
   subCommands: { daemon, devices, submit, status, logs, cancel, run, init, config },
 });
 

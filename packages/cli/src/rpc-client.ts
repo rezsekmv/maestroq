@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { SOCKET_PATH, type RpcEvent, type RpcRequest, encodeMessage } from "@maestroq/core";
 
 export const DAEMON_HINT =
-  "daemon not running; run `mq daemon start` (see docs/launchd.md to install as a service)";
+  "daemon not running; run `maestroq daemon start` (see docs/launchd.md to install as a service)";
 
 export class DaemonNotRunningError extends Error {
   constructor() {

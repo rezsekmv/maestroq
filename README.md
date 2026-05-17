@@ -26,7 +26,7 @@ npm i -g maestroq
 Start the daemon (or install it as a service — see [`docs/launchd.md`](docs/launchd.md)):
 
 ```bash
-mq daemon start &
+maestroq daemon start &
 ```
 
 ### Configure
@@ -34,15 +34,15 @@ mq daemon start &
 Boot the simulator and emulator you want maestroq to own, then:
 
 ```bash
-mq init                               # auto-discovers booted devices + scaffolds starter specs
-mq daemon stop && mq daemon start &   # reload daemon with the new config
+maestroq init                               # auto-discovers booted devices + scaffolds starter specs
+maestroq daemon stop && maestroq daemon start &   # reload daemon with the new config
 ```
 
-`mq init`:
+`maestroq init`:
 
 - Reads `xcrun simctl list devices booted` and `adb devices` to pick one iOS sim and one Android emulator.
 - Writes `~/.maestroq/config.yaml` with those devices and sensible defaults.
-- If `.maestro/` exists in the current directory, also scaffolds `maestroq/smoke-<platform>.yaml` so `mq run` works immediately.
+- If `.maestro/` exists in the current directory, also scaffolds `maestroq/smoke-<platform>.yaml` so `maestroq run` works immediately.
 
 Flags: `--no-discover` (skip the auto-detect), `--no-specs` (skip spec scaffolding), `--from-package-json` (fall back to placeholders if nothing is booted yet).
 
@@ -52,7 +52,7 @@ Flags: `--no-discover` (skip the auto-detect), `--no-specs` (skip spec scaffoldi
 | -------------------------------- | -------------------- | -------------------------------------- | ------------ |
 | `devices[].udid`                 | string (required)    | —                                      | Simulator UDID (`xcrun simctl list devices booted`) or emulator id (`adb devices`). |
 | `devices[].platform`             | `ios` \| `android`   | —                                      | Which worker pool this device joins. |
-| `devices[].label`                | string               | —                                      | Human-readable name shown in `mq devices`. |
+| `devices[].label`                | string               | —                                      | Human-readable name shown in `maestroq devices`. |
 | `devices[].avdName`              | string               | —                                      | Android only. The AVD name passed to `emulator -avd`; needed when the daemon has to cold-boot the emulator. |
 | `metro.port_range`               | `[number, number]`   | `[8081, 8089]`                         | Inclusive port range the daemon allocates from for Metro (dev-client jobs). |
 | `defaults.reboot_sim_before`     | boolean              | `false`                                | Per-job default for `rebootSimBefore` (mitigates iOS port-7001 staleness). |
@@ -63,7 +63,7 @@ Flags: `--no-discover` (skip the auto-detect), `--no-specs` (skip spec scaffoldi
 
 ### Run
 
-After `mq init`, you already have a starter spec at `maestroq/smoke-<platform>.yaml`. Tweak it (or write your own — see the example below) and run:
+After `maestroq init`, you already have a starter spec at `maestroq/smoke-<platform>.yaml`. Tweak it (or write your own — see the example below) and run:
 
 ```yaml
 # maestroq/smoke-ios.yaml
@@ -75,11 +75,11 @@ label: smoke iOS
 ```
 
 ```bash
-mq run    maestroq/smoke-ios.yaml   # blocks, streams logs, exits with the maestro code
-mq submit maestroq/smoke-ios.yaml   # async — prints the job id and returns
-mq status -lH -w                    # live queue (long view, header, watch)
-mq logs   <id> -f                   # follow a job's log
-mq cancel <id>                      # SIGTERM the worker's child group
+maestroq run    maestroq/smoke-ios.yaml   # blocks, streams logs, exits with the maestro code
+maestroq submit maestroq/smoke-ios.yaml   # async — prints the job id and returns
+maestroq status -lH -w                    # live queue (long view, header, watch)
+maestroq logs   <id> -f                   # follow a job's log
+maestroq cancel <id>                      # SIGTERM the worker's child group
 ```
 
 That's it. Multiple worktrees or agents can submit the same way — the daemon FIFOs per device, runs across devices in parallel.

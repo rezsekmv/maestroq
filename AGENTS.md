@@ -17,7 +17,7 @@ The original design plan is `/Users/vencel/.claude/plans/hello-here-is-a-federat
 ```
 packages/core/    @maestroq/core    — types, JobSpec zod schema, config loader, paths, RPC schema
 packages/daemon/  @maestroq/daemon  — the long-running server (queue, workers, lifecycle, RPC)
-packages/cli/     maestroq          — the `mq` binary (citty); `bin.mq` → dist/index.js
+packages/cli/     maestroq          — the `maestroq` binary (citty); `bin.maestroq` → dist/index.js
 examples/         spec YAMLs for darts26 and a vanilla RN project
 docs/             architecture / ai-agents / launchd
 .github/workflows ci.yml + release.yml
@@ -38,11 +38,11 @@ npm test                     # vitest run, 20 tests today
 npm run build                # build all dist/
 
 # manual / live testing
-npm link -w packages/cli     # puts `mq` on PATH (uses dist/index.js)
-mq daemon start &            # foreground daemon (logs to stdout/pino)
-mq devices                   # confirms config + workers
-mq run path/to/spec.yaml     # blocks, streams logs, exits with job code
-mq daemon stop
+npm link -w packages/cli     # puts `maestroq` on PATH (uses dist/index.js)
+maestroq daemon start &            # foreground daemon (logs to stdout/pino)
+maestroq devices                   # confirms config + workers
+maestroq run path/to/spec.yaml     # blocks, streams logs, exits with job code
+maestroq daemon stop
 ```
 
 Do **not** invoke `tsc` directly without `-b` — the project references won't resolve.
@@ -67,7 +67,7 @@ All path constants live in `packages/core/src/paths.ts`. Anywhere you'd hard-cod
 ## Architecture in 60 seconds
 
 ```
-mq CLI ─── unix socket (newline-JSON) ──▶ daemon ─── tick ──▶ Dispatcher ─── worker per device
+maestroq CLI ─── unix socket (newline-JSON) ──▶ daemon ─── tick ──▶ Dispatcher ─── worker per device
                                             │                                    │
                                             └── persists queue.json              └── spawns external children
                                                                                     in their own process groups
@@ -161,7 +161,7 @@ For larger changes, the global rule says to run `coderabbit review --plain`. The
 - No `console.log` in `packages/daemon/` — use the `logger` from `daemon/src/logger.ts` (pino).
 - CLI uses `process.stdout.write` / `process.stderr.write` directly. Status messages → stderr, machine-readable output → stdout. Exit codes are part of the contract: `0` clean, `1` job failure, `2` daemon-not-running.
 
-### When `mq` can't reach the daemon
+### When `maestroq` can't reach the daemon
 
 CLI must print the `DAEMON_HINT` string and exit `2`. This is wired through `guard()` / `guardClient()` in `packages/cli/src/index.ts` — every command goes through one of them. Don't add an auto-spawn path; the plan explicitly rejected it (revisit in v0.2).
 
@@ -181,13 +181,13 @@ CLI must print the `DAEMON_HINT` string and exit `2`. This is wired through `gua
 We have no real-device CI (Mac runners are paid). The recipe for verifying a change end-to-end:
 
 ```bash
-# 1. Build, link, ensure mq is on PATH.
+# 1. Build, link, ensure maestroq is on PATH.
 npm run build && npm link -w packages/cli
 
 # 2. Start daemon fresh.
 rm -rf ~/.maestroq ~/.local/share/maestroq
-mq daemon start > /tmp/mq-daemon.log 2>&1 &
-sleep 1 && mq daemon status
+maestroq daemon start > /tmp/maestroq-daemon.log 2>&1 &
+sleep 1 && maestroq daemon status
 
 # 3. Seed config with real UDIDs from already-booted sims/emulators.
 xcrun simctl list devices booted    # grab the iOS UDID
@@ -195,14 +195,14 @@ adb devices                          # grab the Android emulator id
 $EDITOR ~/.maestroq/config.yaml
 
 # 4. Restart so daemon picks up config.
-mq daemon stop && sleep 1 && mq daemon start > /tmp/mq-daemon.log 2>&1 &
-mq devices
+maestroq daemon stop && sleep 1 && maestroq daemon start > /tmp/maestroq-daemon.log 2>&1 &
+maestroq devices
 
 # 5. Submit specs from a real worktree (darts26).
 cd ~/gitRepos/_home/darts26
-IOS=$(mq submit maestroq/smoke-ios.yaml)
-AND=$(mq submit maestroq/smoke-android.yaml)
-mq status --json | python3 -c '...'   # confirm both reach `running` simultaneously
+IOS=$(maestroq submit maestroq/smoke-ios.yaml)
+AND=$(maestroq submit maestroq/smoke-android.yaml)
+maestroq status --json | python3 -c '...'   # confirm both reach `running` simultaneously
 ```
 
 The verification matrix in the plan file (`hello-here-is-a-federated-goblet.md`, "Verification (v0.1)") covers eleven scenarios — when in doubt, run those.
@@ -214,7 +214,7 @@ The verification matrix in the plan file (`hello-here-is-a-federated-goblet.md`,
 - TCP transport. Unix socket only. The plan explicitly defers TCP to v1.0.
 - Daemon auto-spawn. The CLI prints a hint and exits 2.
 - Parallel runs on >1 iOS sim. v0.2 candidate.
-- A `mq daemon install` command that writes launchd/systemd units. Documented in `docs/launchd.md` as user setup; revisit in v0.2.
+- A `maestroq daemon install` command that writes launchd/systemd units. Documented in `docs/launchd.md` as user setup; revisit in v0.2.
 - Persisting the build cache across restarts. In-memory is enough for v0.1.
 
 If a user asks for one of these and it's genuinely needed, raise it and update the plan before implementing.
@@ -225,7 +225,7 @@ If a user asks for one of these and it's genuinely needed, raise it and update t
 
 1. Check `~/.maestroq/queue.json` — that's the source of truth for job state.
 2. Check `~/.local/share/maestroq/logs/<job-id>.log` — every external child's output lands there.
-3. Check the daemon's own log (wherever you redirected `mq daemon start` to). pino emits JSON; pipe through `pino-pretty` if you have it.
+3. Check the daemon's own log (wherever you redirected `maestroq daemon start` to). pino emits JSON; pipe through `pino-pretty` if you have it.
 4. `pgrep -fl maestro` / `pgrep -fl xcodebuild` — leftover children are the most likely cause of "the next run fails inexplicably". The daemon does *not* yet pkill orphaned xctest-runners on teardown (see "iOS port 7001 staleness" above).
 
 ---

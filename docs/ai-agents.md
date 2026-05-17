@@ -6,7 +6,7 @@ This is the workflow `maestroq` was built for. You have N AI agents (Claude Code
 
 ```bash
 npm i -g maestroq
-mq daemon start &           # or install as a launchd job; see docs/launchd.md
+maestroq daemon start &           # or install as a launchd job; see docs/launchd.md
 $EDITOR ~/.maestroq/config.yaml
 ```
 
@@ -33,25 +33,25 @@ Add this to your project's `CLAUDE.md` (or your agent's equivalent):
 > To run Maestro flows, submit them through `maestroq` rather than calling `maestro` directly:
 >
 > ```
-> mq run maestroq/smoke-ios.yaml
+> maestroq run maestroq/smoke-ios.yaml
 > ```
 >
-> `mq run` blocks until the job finishes, streams logs, and exits with the underlying Maestro exit code — so `mq run … && next-step` works the way you'd expect. If the daemon isn't running, you'll see a one-line hint; ask the human to start it.
+> `maestroq run` blocks until the job finishes, streams logs, and exits with the underlying Maestro exit code — so `maestroq run … && next-step` works the way you'd expect. If the daemon isn't running, you'll see a one-line hint; ask the human to start it.
 
 If you want the agent to be able to fire off long jobs and come back later:
 
 ```bash
-JOB=$(mq submit maestroq/smoke-ios.yaml)
+JOB=$(maestroq submit maestroq/smoke-ios.yaml)
 # ... agent does other work ...
-mq logs "$JOB" -f
+maestroq logs "$JOB" -f
 ```
 
 ## Why this works
 
 - One queue, FIFO, across every agent on the box — no more "did another agent's build clobber mine?"
-- Each job's child processes live in their own process group, so an agent calling `mq cancel <id>` cleanly kills `maestro`, the in-flight `xcodebuild`/`gradle`, and any Metro instance unique to that job.
+- Each job's child processes live in their own process group, so an agent calling `maestroq cancel <id>` cleanly kills `maestro`, the in-flight `xcodebuild`/`gradle`, and any Metro instance unique to that job.
 - The build cache is **off** while a working tree is dirty — agents iterating on changes never get served a stale binary.
-- `mq status --json` and per-command `--json` flags give agents a structured surface to reason about.
+- `maestroq status --json` and per-command `--json` flags give agents a structured surface to reason about.
 
 ## What `maestroq` does **not** do
 

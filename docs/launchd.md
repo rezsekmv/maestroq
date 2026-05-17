@@ -1,6 +1,6 @@
 # Running `maestroq` as a service
 
-v0.1 ships only `mq daemon start` (foreground). To keep the daemon up across logins, install it as a service yourself.
+v0.1 ships only `maestroq daemon start` (foreground). To keep the daemon up across logins, install it as a service yourself.
 
 ## macOS — launchd
 
@@ -15,7 +15,7 @@ Save as `~/Library/LaunchAgents/dev.maestroq.daemon.plist`:
   <string>dev.maestroq.daemon</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/bin/mq</string>
+    <string>/usr/local/bin/maestroq</string>
     <string>daemon</string>
     <string>start</string>
   </array>
@@ -38,7 +38,7 @@ launchctl load ~/Library/LaunchAgents/dev.maestroq.daemon.plist
 launchctl start dev.maestroq.daemon
 ```
 
-Adjust the `mq` path if you installed via nvm or volta.
+Adjust the `maestroq` path if you installed via nvm or volta.
 
 ## Linux — systemd (user unit)
 
@@ -50,7 +50,7 @@ Description=maestroq daemon
 After=default.target
 
 [Service]
-ExecStart=%h/.npm-global/bin/mq daemon start
+ExecStart=%h/.npm-global/bin/maestroq daemon start
 Restart=on-failure
 RestartSec=5
 
@@ -63,4 +63,4 @@ systemctl --user daemon-reload
 systemctl --user enable --now maestroq.service
 ```
 
-A `mq daemon install` command that writes these for you is a v0.2 candidate.
+A `maestroq daemon install` command that writes these for you is a v0.2 candidate.
