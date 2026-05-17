@@ -31,17 +31,20 @@ mq daemon start &
 
 ### Configure
 
-Scaffold the config, then fill in the devices you want the daemon to own:
+Boot the simulator and emulator you want maestroq to own, then:
 
 ```bash
-mq init                               # writes ~/.maestroq/config.yaml
-xcrun simctl list devices booted      # grab the iOS UDID
-adb devices                            # grab the Android emulator id
-$EDITOR ~/.maestroq/config.yaml        # paste them in
-mq daemon stop && mq daemon start &    # reload config
+mq init                               # auto-discovers booted devices + scaffolds starter specs
+mq daemon stop && mq daemon start &   # reload daemon with the new config
 ```
 
-If your project already has `test:e2e:*` scripts in `package.json`, `mq init --from-package-json` seeds placeholder device entries based on which platforms it sees.
+`mq init`:
+
+- Reads `xcrun simctl list devices booted` and `adb devices` to pick one iOS sim and one Android emulator.
+- Writes `~/.maestroq/config.yaml` with those devices and sensible defaults.
+- If `.maestro/` exists in the current directory, also scaffolds `maestroq/smoke-<platform>.yaml` so `mq run` works immediately.
+
+Flags: `--no-discover` (skip the auto-detect), `--no-specs` (skip spec scaffolding), `--from-package-json` (fall back to placeholders if nothing is booted yet).
 
 #### `config.yaml` reference
 
@@ -60,7 +63,7 @@ If your project already has `test:e2e:*` scripts in `package.json`, `mq init --f
 
 ### Run
 
-Drop a spec next to your `.maestro/` flows:
+After `mq init`, you already have a starter spec at `maestroq/smoke-<platform>.yaml`. Tweak it (or write your own — see the example below) and run:
 
 ```yaml
 # maestroq/smoke-ios.yaml
@@ -70,8 +73,6 @@ build: { variant: release, cache: true }
 rebootSimBefore: true
 label: smoke iOS
 ```
-
-And run it:
 
 ```bash
 mq run    maestroq/smoke-ios.yaml   # blocks, streams logs, exits with the maestro code
