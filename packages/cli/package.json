@@ -1,6 +1,13 @@
 {
   "name": "maestroq",
   "version": "0.2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rezsekmv/maestroq.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/rezsekmv/maestroq#readme",
+  "bugs": "https://github.com/rezsekmv/maestroq/issues",
   "scripts": {
     "build": "tsc -b",
     "prepublishOnly": "bash ../../scripts/sync-readme.sh"
