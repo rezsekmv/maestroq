@@ -79,7 +79,7 @@ function writeStarterSpecs(cwd: string, devices: DiscoveredDevice[]): string[] {
   if (devices.length === 0) return [];
   const maestroDir = join(cwd, ".maestro");
   if (!existsSync(maestroDir)) return [];
-  const specsDir = join(cwd, "maestroq");
+  const specsDir = maestroDir;
   mkdirSync(specsDir, { recursive: true });
 
   const written: string[] = [];

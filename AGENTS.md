@@ -135,9 +135,13 @@ If maestro upstream fixes this, the watchdog can become a no-op or be removed.
 
 After a `maestro test` run on iOS, the `maestro-driver-iosUITests-Runner` and `xcodebuild test-without-building` helpers can linger past the parent CLI exit. They hold port 7001 stale. The next iOS run dies during install with `Failed to connect to /127.0.0.1:7001`.
 
-**Mitigation:** `JobSpec.rebootSimBefore: true` runs `simctl shutdown` + `bootstatus` (see `lifecycle/boot.ts`). Expensive (~30 s) but reliable. Document on regression specs that hit iOS repeatedly.
+**Mitigation 1 (default):** `teardownJob` calls `cleanupIosLeftovers(udid, ...)` in `lifecycle/cleanup-ios.ts`, which `pkill -f`s the two leftover patterns scoped to the just-used UDID. Cheap, runs on every iOS job including the cancel path.
 
-Future improvement: detect the lingering processes after teardown and `pkill -f maestro-driver-ios` automatically. Out of v0.1 scope.
+**Mitigation 2 (fallback):** `JobSpec.rebootSimBefore: true` runs `simctl shutdown` + `bootstatus` (see `lifecycle/boot.ts`). Expensive (~30 s) — keep as a knob for projects where the pkill isn't catching something, but it should no longer be the default.
+
+### Parallel iOS is capped at one
+
+Upstream `maestro test` hardcodes the host driver port (7001) and the WDA port — two iOS sims on the same Mac will collide regardless of which UDIDs are configured. The dispatcher honors `config.defaults.max_concurrent_ios` (default `1`) by counting busy iOS workers in `tick()` and skipping idle iOS workers when the cap is reached (`dispatcher.ts`). Android stays fully parallel. Re-evaluate when upstream maestro exposes a port flag (today it doesn't; `maestro-runner`, a community Go fork, may or may not — verify before depending on it).
 
 ### Cancel must escalate
 
@@ -146,6 +150,12 @@ Hung JVMs ignore SIGTERM. `worker.ts:cancel` sends SIGTERM, then schedules a 5 s
 ---
 
 ## Conventions
+
+### Project layout (`.maestro/`)
+
+Per-project specs and per-project config live under `.maestro/` at the project root, next to the project's existing Maestro flow files. The CLI walks up from the spec path to find an optional `.maestro/maestroq.yaml` and merges its `defaults:` block into the spec before submission (spec fields always win). A bare `maestroq run smoke-ios` resolves to `.maestro/smoke-ios.yaml` walking up from cwd.
+
+`init.ts:writeStarterSpecs` scaffolds into `.maestro/`, and `examples/plain-rn/` demonstrates the convention. Anywhere docs mention spec paths, write `.maestro/<name>.yaml`, not `maestroq/<name>.yaml` — the latter is deprecated.
 
 ### Commits
 

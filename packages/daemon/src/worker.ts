@@ -183,7 +183,7 @@ export class Worker extends EventEmitter {
       });
 
       this.setStatus(job.id, "tearing-down");
-      await teardownJob({ metroHandle, logSink: sink });
+      await teardownJob({ device: this.device, metroHandle, logSink: sink });
 
       if (this.cancelled.has(job.id)) {
         this.queue.update(job.id, { finishedAt: Date.now(), exitCode: result.exitCode });
@@ -206,7 +206,7 @@ export class Worker extends EventEmitter {
       const message = err instanceof Error ? err.message : String(err);
       sink(`[error] ${message}`);
       try {
-        await teardownJob({ metroHandle, logSink: sink });
+        await teardownJob({ device: this.device, metroHandle, logSink: sink });
       } catch (teardownErr) {
         const teardownMessage =
           teardownErr instanceof Error ? teardownErr.message : String(teardownErr);

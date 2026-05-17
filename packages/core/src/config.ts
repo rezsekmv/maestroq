@@ -25,8 +25,9 @@ export const ConfigSchema = z.object({
     .object({
       reboot_sim_before: z.boolean().default(false),
       build_cache: z.boolean().default(true),
+      max_concurrent_ios: z.number().int().positive().default(1),
     })
-    .default({ reboot_sim_before: false, build_cache: true }),
+    .default({ reboot_sim_before: false, build_cache: true, max_concurrent_ios: 1 }),
   log_dir: z.string().default("~/.local/share/maestroq/logs"),
   artifact_dir: z.string().default("~/.local/share/maestroq/artifacts"),
 });

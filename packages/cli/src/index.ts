@@ -16,6 +16,11 @@ import {
   connect,
 } from "./rpc-client.js";
 import { defaultConfigPath, initConfig } from "./init.js";
+import {
+  findProjectConfig,
+  mergeProjectConfigIntoSpec,
+  resolveSpecPath,
+} from "./project-config-loader.js";
 import { printDevices, printEvent, printJobs } from "./render.js";
 import { DEFAULT_LIMIT, filterJobs, parseLimit, parseSince } from "./since.js";
 import { type ColorMode, resolveUseColor } from "./color.js";
@@ -45,12 +50,18 @@ async function callOnce(req: Parameters<Awaited<ReturnType<typeof connect>>["sen
   }
 }
 
-function loadSpec(path: string): JobSpec {
-  const abs = resolve(path);
+function loadSpec(pathOrName: string): JobSpec {
+  const abs = resolveSpecPath(pathOrName);
   const raw = readFileSync(abs, "utf8");
-  const parsed = parseYaml(raw) ?? {};
-  const withCwd = { cwd: process.cwd(), ...parsed };
-  return JobSpecSchema.parse(withCwd);
+  const parsed = (parseYaml(raw) ?? {}) as Record<string, unknown>;
+  const project = findProjectConfig(resolve(abs, ".."));
+  let rawSpec: Record<string, unknown>;
+  if (project) {
+    rawSpec = mergeProjectConfigIntoSpec(parsed, project) as Record<string, unknown>;
+  } else {
+    rawSpec = { cwd: process.cwd(), ...parsed };
+  }
+  return JobSpecSchema.parse(rawSpec);
 }
 
 const daemonStart = defineCommand({

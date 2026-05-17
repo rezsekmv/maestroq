@@ -11,7 +11,7 @@ export class Dispatcher extends EventEmitter {
   constructor(
     private readonly queue: JobQueue,
     metroPool: MetroPortPool,
-    config: Config,
+    private readonly config: Config,
     devices: DeviceConfig[],
   ) {
     super();
@@ -30,8 +30,15 @@ export class Dispatcher extends EventEmitter {
   }
 
   tick(): void {
+    // Upstream maestro hardcodes the iOS driver host port (7001), so two iOS sims
+    // can't run maestro concurrently on the same Mac. Serialize iOS at the
+    // dispatcher level — Android stays fully parallel.
+    const iosCap = this.config.defaults.max_concurrent_ios;
+    let iosBusy = this.workers.filter((w) => w.platform === "ios" && w.isBusy()).length;
     for (const w of this.workers) {
-      if (!w.isBusy()) w.tryStart();
+      if (w.isBusy()) continue;
+      if (w.platform === "ios" && iosBusy >= iosCap) continue;
+      if (w.tryStart() && w.platform === "ios") iosBusy += 1;
     }
   }
 

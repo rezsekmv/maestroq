@@ -1,10 +1,21 @@
 # examples
 
-Ready-to-adapt `maestroq` job specs. Copy a directory into your own repo as `maestroq/`, tweak the flow paths and env vars, and you're done.
+Ready-to-adapt `maestroq` job specs. Drop a `.maestro/` directory (or files into your existing one) at the root of your project alongside your Maestro flow files, tweak the flow paths and env vars, and you're done.
 
 ## `plain-rn/`
 
 A minimal smoke spec for a vanilla React Native / Expo project — single flow, release build, no extra env. Use this as the starting template if you're wiring `maestroq` into a new project for the first time.
+
+The directory layout is the convention every project should follow:
+
+```
+plain-rn/
+└── .maestro/
+    ├── maestroq.yaml     # optional per-project defaults (cwd, rebootSimBefore, build…)
+    └── smoke-ios.yaml    # one job spec per scenario
+```
+
+`maestroq.yaml` is optional — when present, the CLI walks up from the spec file to find it and merges its `defaults:` block into the spec before submission. Spec fields always win.
 
 ## Auto-scaffolded vs. these examples
 

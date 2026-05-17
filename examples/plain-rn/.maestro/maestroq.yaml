@@ -1,0 +1,8 @@
+# Optional per-project config picked up by `maestroq run`/`submit` when the spec
+# lives anywhere under this directory. Spec fields always win; this only fills
+# gaps (so you don't repeat `cwd`, common `rebootSimBefore`, etc. in every spec).
+defaults:
+  rebootSimBefore: true
+  build:
+    variant: release
+    cache: true

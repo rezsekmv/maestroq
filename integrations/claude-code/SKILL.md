@@ -1,6 +1,6 @@
 ---
 name: maestroq
-description: Submit Maestro UI test jobs (e2e / regression / smoke) through the local maestroq daemon instead of calling `maestro` directly. Use when running flows from `.maestro/` in a React Native / Expo project, or when the project has a `maestroq/*.yaml` spec, or when multiple parallel worktrees/agents share one simulator/emulator. Also use when the user asks to "run maestro", "run e2e", "run smoke tests", "run regression", or asks about the maestroq daemon / queue.
+description: Submit Maestro UI test jobs (e2e / regression / smoke) through the local maestroq daemon instead of calling `maestro` directly. Use when running flows from `.maestro/` in a React Native / Expo project, or when the project has a `.maestro/*.yaml` spec, or when multiple parallel worktrees/agents share one simulator/emulator. Also use when the user asks to "run maestro", "run e2e", "run smoke tests", "run regression", or asks about the maestroq daemon / queue.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
@@ -26,8 +26,8 @@ maestroq daemon status
 
 A job spec is a small YAML file. Look in this order:
 
-1. `<cwd>/maestroq/*.yaml` — preferred location. If specs exist, list them and pick the one matching the user's request (smoke / regression / dev-client / etc.).
-2. `<cwd>/.maestro/` — flow files exist but no spec. **Offer to write one.** A minimal spec:
+1. `<cwd>/.maestro/*.yaml` (excluding `maestroq.yaml`) — preferred location. If specs exist, list them and pick the one matching the user's request (smoke / regression / dev-client / etc.).
+2. `<cwd>/.maestro/` exists with flow files but no spec → **offer to write one.** A minimal spec:
 
    ```yaml
    platform: ios            # or android
@@ -37,9 +37,22 @@ A job spec is a small YAML file. Look in this order:
    label: "smoke iOS"
    ```
 
-   Save it to `<cwd>/maestroq/<name>-<platform>.yaml`.
+   Save it to `<cwd>/.maestro/<name>-<platform>.yaml`.
 
-If the user has two platforms (iOS + Android), prefer writing two specs and running them in parallel; the daemon will dispatch each to its own device worker.
+3. Legacy `<cwd>/maestroq/*.yaml` — older projects. Encourage migrating to `.maestro/`, but specs there still work if the path is passed explicitly.
+
+If the user has two platforms (iOS + Android), prefer writing two specs and running them in parallel; the daemon will dispatch each to its own device worker (subject to the iOS cap below).
+
+### Per-project defaults (optional)
+
+If `.maestro/maestroq.yaml` exists, the CLI walks up from the spec to find it and merges its `defaults:` block into every job submitted from that project — spec fields always win. Good place to set `cwd`, default `rebootSimBefore`, default `build`, etc. so individual specs stay short.
+
+```yaml
+# .maestro/maestroq.yaml
+defaults:
+  rebootSimBefore: false   # default — pkill on teardown handles most port-7001 staleness
+  build: { variant: release, cache: true }
+```
 
 ### Regression (full-suite) specs
 
@@ -55,11 +68,10 @@ flows:
 build:
   variant: release
   cache: true
-rebootSimBefore: true       # mitigates iOS port-7001 staleness between runs
 label: "regression iOS"
 ```
 
-The same shape with `platform: android` for the Android side (omit `rebootSimBefore`).
+The same shape with `platform: android` for the Android side.
 
 ## 3. Submit the job
 
@@ -68,15 +80,17 @@ Two modes — pick based on what the user asked for:
 **Synchronous (default — they want a green/red verdict now):**
 
 ```bash
-maestroq run maestroq/<spec>.yaml
+maestroq run .maestro/<spec>.yaml      # or shorthand: maestroq run <spec>
 ```
 
 `maestroq run` blocks, streams logs, and **exits with the underlying Maestro exit code**. Use this when the user wants results before continuing. The agent should branch on `$?`.
 
+`maestroq run <bare-name>` (no slash, no `.yaml`) resolves to `.maestro/<bare-name>.yaml` walking up from cwd — handy when you don't want to type the path.
+
 **Async / fire-and-forget (they'll come back later, or you have other work to do):**
 
 ```bash
-JOB=$(maestroq submit maestroq/<spec>.yaml)
+JOB=$(maestroq submit .maestro/<spec>.yaml)
 echo "submitted $JOB"
 # … other work …
 maestroq logs "$JOB" -f   # blocks until terminal, exits with job code
@@ -85,12 +99,14 @@ maestroq logs "$JOB" -f   # blocks until terminal, exits with job code
 ### Running both platforms in parallel
 
 ```bash
-maestroq run maestroq/smoke-ios.yaml & \
-maestroq run maestroq/smoke-android.yaml & \
+maestroq run .maestro/smoke-ios.yaml & \
+maestroq run .maestro/smoke-android.yaml & \
 wait
 ```
 
 Each `maestroq run` claims one device. The daemon dispatches them concurrently. If two jobs target the same platform from different worktrees, the second one queues and starts when the first finishes.
+
+**iOS is capped at one concurrent job.** Upstream `maestro test` hardcodes the iOS driver host port, so two iOS sims can't run simultaneously. The dispatcher enforces this via `defaults.max_concurrent_ios` (default `1`) in `~/.maestroq/config.yaml` — extra iOS jobs queue instead of failing on port collisions. Android stays fully parallel.
 
 ## 4. Watching / inspecting
 
@@ -118,8 +134,9 @@ maestroq devices           # which devices are configured and which are busy
 
 ### Known sharp edges (already mitigated, but worth recognizing)
 
-- **iOS "Failed to connect to /127.0.0.1:7001"** during install → leftover xctest-runners from a previous Maestro session. Add `rebootSimBefore: true` to the spec. If specs in `maestroq/` lack it for iOS, suggest adding it.
-- **Job stuck in `running` long after `N/N Flows Passed` shows in the log** → the in-build daemon already handles this via a 30s finalize watchdog (SIGKILLs the JVM). If you see this without resolution, file an issue.
+- **iOS "Failed to connect to /127.0.0.1:7001"** during install → leftover xctest-runners from a previous Maestro session. The daemon now `pkill`s these on teardown (scoped to the UDID), so this should be rare. If it still happens, fall back to `rebootSimBefore: true` on the spec — the older, more expensive (~30 s) mitigation.
+- **Job stuck in `running` long after `N/N Flows Passed` shows in the log** → the daemon handles this via a 30 s finalize watchdog (SIGKILLs the JVM). If you see this without resolution, file an issue.
+- **Two iOS jobs submitted but only one running** → expected. Upstream maestro can't parallel-iOS on one Mac; the cap serializes them.
 
 ## 6. When something is wrong
 

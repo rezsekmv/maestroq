@@ -111,7 +111,7 @@ describe("initConfig with device discovery", () => {
 });
 
 describe("initConfig starter specs", () => {
-  it("writes maestroq/smoke-<platform>.yaml when .maestro/ exists and a device is discovered", () => {
+  it("writes .maestro/smoke-<platform>.yaml when .maestro/ exists and a device is discovered", () => {
     mkdirSync(join(dir, ".maestro"));
     const run: DiscoverDeps["run"] = (cmd, args) => {
       const key = `${cmd} ${args.join(" ")}`;
@@ -127,8 +127,8 @@ describe("initConfig starter specs", () => {
     };
     const result = initConfig({ cwd: dir, fromPackageJson: false, configPath, discoverDeps: { run } });
     expect(result.specsWritten).toHaveLength(1);
-    expect(existsSync(join(dir, "maestroq", "smoke-ios.yaml"))).toBe(true);
-    const spec = readFileSync(join(dir, "maestroq", "smoke-ios.yaml"), "utf8");
+    expect(existsSync(join(dir, ".maestro", "smoke-ios.yaml"))).toBe(true);
+    const spec = readFileSync(join(dir, ".maestro", "smoke-ios.yaml"), "utf8");
     expect(spec).toContain("platform: ios");
     expect(spec).toContain("rebootSimBefore: true");
     expect(spec).toContain(".maestro");

@@ -44,7 +44,7 @@ maestroq daemon stop && maestroq daemon start &   # reload daemon with the new c
 
 - Reads `xcrun simctl list devices booted` and `adb devices` to pick one iOS sim and one Android emulator.
 - Writes `~/.maestroq/config.yaml` with those devices and sensible defaults.
-- If `.maestro/` exists in the current directory, also scaffolds `maestroq/smoke-<platform>.yaml` so `maestroq run` works immediately.
+- If `.maestro/` exists in the current directory, also scaffolds `.maestro/smoke-<platform>.yaml` so `maestroq run` works immediately.
 
 Flags: `--no-discover` (skip the auto-detect), `--no-specs` (skip spec scaffolding), `--from-package-json` (fall back to placeholders if nothing is booted yet).
 
@@ -57,34 +57,48 @@ Flags: `--no-discover` (skip the auto-detect), `--no-specs` (skip spec scaffoldi
 | `devices[].label`                | string               | —                                      | Human-readable name shown in `maestroq devices`. |
 | `devices[].avdName`              | string               | —                                      | Android only. The AVD name passed to `emulator -avd`; needed when the daemon has to cold-boot the emulator. |
 | `metro.port_range`               | `[number, number]`   | `[8081, 8089]`                         | Inclusive port range the daemon allocates from for Metro (dev-client jobs). |
-| `defaults.reboot_sim_before`     | boolean              | `false`                                | Per-job default for `rebootSimBefore` (mitigates iOS port-7001 staleness). |
+| `defaults.reboot_sim_before`     | boolean              | `false`                                | Per-job default for `rebootSimBefore`. Fallback knob now that pkill-on-teardown handles most iOS port-7001 staleness. |
 | `defaults.build_cache`           | boolean              | `true`                                 | Per-job default for `build.cache`. Auto-bypassed when the working tree is dirty. |
+| `defaults.max_concurrent_ios`    | integer              | `1`                                    | Max iOS jobs running simultaneously. Upstream maestro hardcodes the iOS driver host port, so parallel iOS sims on one Mac don't work — this serializes iOS at the dispatcher. Android stays fully parallel. |
 | `log_dir`                        | string (path)        | `~/.local/share/maestroq/logs`         | Per-job log file directory. `~` is expanded. |
 | `artifact_dir`                   | string (path)        | `~/.local/share/maestroq/artifacts`    | Maestro `--output` artifact directory. `~` is expanded. |
 
 
 ### Run
 
-After `maestroq init`, you already have a starter spec at `maestroq/smoke-<platform>.yaml`. Tweak it (or write your own — see the example below) and run:
+After `maestroq init`, you already have a starter spec at `.maestro/smoke-<platform>.yaml`. Tweak it (or write your own — see the example below) and run:
 
 ```yaml
-# maestroq/smoke-ios.yaml
+# .maestro/smoke-ios.yaml
 platform: ios
 flows: [.maestro/e2e/smoke]
 build: { variant: release, cache: true }
-rebootSimBefore: true
 label: smoke iOS
 ```
 
 ```bash
-maestroq run    maestroq/smoke-ios.yaml   # blocks, streams logs, exits with the maestro code
-maestroq submit maestroq/smoke-ios.yaml   # async — prints the job id and returns
+maestroq run    .maestro/smoke-ios.yaml   # blocks, streams logs, exits with the maestro code
+maestroq run    smoke-ios                 # shorthand — resolves to .maestro/smoke-ios.yaml walking up
+maestroq submit .maestro/smoke-ios.yaml   # async — prints the job id and returns
 maestroq status -lH -w                    # live queue (long view, header, watch)
 maestroq logs   <id> -f                   # follow a job's log
 maestroq cancel <id>                      # SIGTERM the worker's child group
 ```
 
 That's it. Multiple worktrees or agents can submit the same way — the daemon FIFOs per device, runs across devices in parallel.
+
+#### Per-project config (optional)
+
+Drop a `.maestro/maestroq.yaml` next to your specs and the CLI will merge it into every job submitted from that project, so you don't repeat boilerplate in every spec:
+
+```yaml
+# .maestro/maestroq.yaml
+defaults:
+  rebootSimBefore: true
+  build: { variant: release, cache: true }
+```
+
+Spec fields always win — this only fills gaps.
 
 ## Docs
 
