@@ -89,6 +89,7 @@ That's it. Multiple worktrees or agents can submit the same way — the daemon F
 - [Architecture & lifecycle](docs/architecture.md)
 - [Service install (launchd / systemd)](docs/launchd.md)
 - [Notes for AI agent workflows](docs/ai-agents.md)
+- [Claude Code skill](integrations/claude-code/SKILL.md) — drop-in skill so agents auto-route Maestro runs through `maestroq`
 - [Contributor guide / invariants](AGENTS.md)
 
 ---
