@@ -22,10 +22,11 @@ export interface StartMetroOptions {
   reuse: boolean;
   logSink: (line: string) => void;
   signal?: AbortSignal;
+  readyTimeoutMs?: number;
 }
 
 export async function startMetro(opts: StartMetroOptions): Promise<MetroHandle> {
-  const { spec, pool, worktreeKey, reuse, logSink, signal } = opts;
+  const { spec, pool, worktreeKey, reuse, logSink, signal, readyTimeoutMs } = opts;
   const lease = pool.acquire(worktreeKey, reuse);
   const existing = liveMetros.get(lease.port);
   if (existing?.alive && existing.child.exitCode === null) {
@@ -69,7 +70,7 @@ export async function startMetro(opts: StartMetroOptions): Promise<MetroHandle> 
   });
   child.catch(() => undefined);
 
-  await waitForMetroReady(lease.port, undefined, signal);
+  await waitForMetroReady(lease.port, readyTimeoutMs, signal);
 
   return {
     lease,

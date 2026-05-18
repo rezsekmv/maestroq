@@ -15,6 +15,8 @@ const ANSI = {
 
 export type ColorMode = "auto" | "always" | "never";
 
+export type PaintColor = keyof typeof ANSI;
+
 export function resolveUseColor(
   mode: ColorMode,
   stream: NodeJS.WriteStream = process.stdout,
@@ -27,7 +29,7 @@ export function resolveUseColor(
   return Boolean(stream.isTTY);
 }
 
-const STATUS_COLOR: Record<JobStatus, keyof typeof ANSI> = {
+const STATUS_COLOR: Record<JobStatus, PaintColor> = {
   queued: "cyan",
   building: "yellow",
   installing: "yellow",
@@ -39,18 +41,18 @@ const STATUS_COLOR: Record<JobStatus, keyof typeof ANSI> = {
   cancelled: "gray",
 };
 
-export function colorStatus(status: JobStatus): keyof typeof ANSI {
+export function colorStatus(status: JobStatus): PaintColor {
   return STATUS_COLOR[status];
 }
 
-export function colorExit(exitCode: number | undefined): keyof typeof ANSI | null {
+export function colorExit(exitCode: number | undefined): PaintColor | null {
   if (exitCode == null) return null;
   return exitCode === 0 ? "green" : "red";
 }
 
 export function paint(
   text: string,
-  color: keyof typeof ANSI | null | undefined,
+  color: PaintColor | null | undefined,
   opts: { bold?: boolean } = {},
 ): string {
   const codes: string[] = [];

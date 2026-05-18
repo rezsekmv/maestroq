@@ -216,10 +216,11 @@ async function dispatchRequest(
 
     case "cancel": {
       const ok = opts.dispatcher.cancel(req.jobId);
-      send(client.socket, {
-        kind: ok ? "ok" : "error",
-        ...(ok ? { payload: { cancelled: req.jobId } } : { message: "could not cancel" }),
-      } as RpcEvent);
+      if (ok) {
+        send(client.socket, { kind: "ok", payload: { cancelled: req.jobId } });
+      } else {
+        send(client.socket, { kind: "error", message: "could not cancel" });
+      }
       send(client.socket, { kind: "end" });
       return;
     }

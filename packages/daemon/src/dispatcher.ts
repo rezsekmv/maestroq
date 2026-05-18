@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { Config, DeviceConfig } from "@maestroq/core";
+import type { Config, DeviceConfig, WorkerInfo } from "@maestroq/core";
 import { logger } from "./logger.js";
 import type { MetroPortPool } from "./metro-pool.js";
 import type { JobQueue } from "./queue.js";
@@ -69,14 +69,11 @@ export class Dispatcher extends EventEmitter {
     return w.cancel(jobId);
   }
 
-  describeWorkers(): Array<{ udid: string; platform: string; busy: boolean; label?: string }> {
+  describeWorkers(): WorkerInfo[] {
     return this.workers.map((w) => ({
       udid: w.udid,
       platform: w.platform,
       busy: w.isBusy(),
-      ...((): { label?: string } => {
-        return {};
-      })(),
     }));
   }
 }

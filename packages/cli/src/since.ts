@@ -56,8 +56,3 @@ export function filterJobs(payload: unknown, opts: FilterOptions): unknown {
   }
   return { ...p, jobs: kept };
 }
-
-// Back-compat alias used by older tests / callers.
-export function filterJobsBySince(payload: unknown, sinceMs: number): unknown {
-  return filterJobs(payload, { sinceMs, maxCount: null });
-}

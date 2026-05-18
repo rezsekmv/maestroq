@@ -21,3 +21,30 @@ describe("ConfigSchema defaults.runner", () => {
     expect(() => ConfigSchema.parse({ defaults: { runner: "custom" } })).toThrow();
   });
 });
+
+describe("ConfigSchema timing defaults", () => {
+  it("sets cancel/metro/maestro timeouts to their defaults", () => {
+    const cfg = ConfigSchema.parse({});
+    expect(cfg.defaults.cancel_grace_ms).toBe(5_000);
+    expect(cfg.defaults.metro_ready_timeout_ms).toBe(60_000);
+    expect(cfg.defaults.maestro_finalize_timeout_ms).toBe(30_000);
+  });
+
+  it("accepts user-supplied timeouts", () => {
+    const cfg = ConfigSchema.parse({
+      defaults: {
+        cancel_grace_ms: 12_000,
+        metro_ready_timeout_ms: 90_000,
+        maestro_finalize_timeout_ms: 45_000,
+      },
+    });
+    expect(cfg.defaults.cancel_grace_ms).toBe(12_000);
+    expect(cfg.defaults.metro_ready_timeout_ms).toBe(90_000);
+    expect(cfg.defaults.maestro_finalize_timeout_ms).toBe(45_000);
+  });
+
+  it("rejects non-positive timing values", () => {
+    expect(() => ConfigSchema.parse({ defaults: { cancel_grace_ms: 0 } })).toThrow();
+    expect(() => ConfigSchema.parse({ defaults: { metro_ready_timeout_ms: -1 } })).toThrow();
+  });
+});

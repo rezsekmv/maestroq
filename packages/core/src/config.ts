@@ -30,12 +30,18 @@ export const ConfigSchema = z.object({
       reboot_sim_before: z.boolean().default(false),
       build_cache: z.boolean().default(true),
       max_concurrent_ios: z.number().int().positive().default(1),
+      cancel_grace_ms: z.number().int().positive().default(5_000),
+      metro_ready_timeout_ms: z.number().int().positive().default(60_000),
+      maestro_finalize_timeout_ms: z.number().int().positive().default(30_000),
     })
     .default({
       runner: "maestro-runner",
       reboot_sim_before: false,
       build_cache: true,
       max_concurrent_ios: 1,
+      cancel_grace_ms: 5_000,
+      metro_ready_timeout_ms: 60_000,
+      maestro_finalize_timeout_ms: 30_000,
     }),
   log_dir: z.string().default("~/.local/share/maestroq/logs"),
   artifact_dir: z.string().default("~/.local/share/maestroq/artifacts"),

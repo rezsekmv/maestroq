@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { JobSpecSchema, JobStatusSchema } from "./job-spec.js";
+import { JobRecordSchema, JobSpecSchema, JobStatusSchema, PlatformSchema } from "./job-spec.js";
 
 export const RpcRequestSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("ping") }),
@@ -26,6 +26,31 @@ export const RpcEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("end") }),
 ]);
 export type RpcEvent = z.infer<typeof RpcEventSchema>;
+
+export const WorkerInfoSchema = z.object({
+  udid: z.string(),
+  platform: PlatformSchema,
+  busy: z.boolean(),
+  label: z.string().optional(),
+});
+export type WorkerInfo = z.infer<typeof WorkerInfoSchema>;
+
+export const PingResponseSchema = z.object({ pong: z.literal(true) });
+export type PingResponse = z.infer<typeof PingResponseSchema>;
+
+export const SubmitResponseSchema = z.object({ jobId: z.string() });
+export type SubmitResponse = z.infer<typeof SubmitResponseSchema>;
+
+export const StatusResponseSchema = z.object({
+  jobs: z.union([JobRecordSchema, z.array(JobRecordSchema)]).optional(),
+});
+export type StatusResponse = z.infer<typeof StatusResponseSchema>;
+
+export const CancelResponseSchema = z.object({ cancelled: z.string() });
+export type CancelResponse = z.infer<typeof CancelResponseSchema>;
+
+export const DevicesResponseSchema = z.object({ devices: z.array(WorkerInfoSchema) });
+export type DevicesResponse = z.infer<typeof DevicesResponseSchema>;
 
 export function encodeMessage(obj: unknown): string {
   return `${JSON.stringify(obj)}\n`;
