@@ -225,6 +225,18 @@ async function dispatchRequest(
       return;
     }
 
+    case "prune": {
+      const removed = opts.queue.prune({
+        olderThanMs: req.olderThanMs,
+        statuses: req.statuses,
+        deleteLogs: req.deleteLogs,
+        deleteArtifacts: req.deleteArtifacts,
+      });
+      send(client.socket, { kind: "ok", payload: { removed } });
+      send(client.socket, { kind: "end" });
+      return;
+    }
+
     case "shutdown": {
       send(client.socket, { kind: "ok" });
       send(client.socket, { kind: "end" });

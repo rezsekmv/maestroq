@@ -9,6 +9,13 @@ export const RpcRequestSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("logs"), jobId: z.string(), follow: z.boolean().default(false) }),
   z.object({ op: z.literal("cancel"), jobId: z.string() }),
   z.object({ op: z.literal("shutdown") }),
+  z.object({
+    op: z.literal("prune"),
+    olderThanMs: z.number().int().nonnegative().optional(),
+    statuses: z.array(JobStatusSchema).optional(),
+    deleteLogs: z.boolean().optional(),
+    deleteArtifacts: z.boolean().optional(),
+  }),
 ]);
 export type RpcRequest = z.infer<typeof RpcRequestSchema>;
 
