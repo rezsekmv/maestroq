@@ -1,9 +1,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { JobSpecSchema } from "@maestroq/core";
 import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { JobSpecSchema } from "@maestroq/core";
 import {
   _resetCacheForTests,
   decideCache,

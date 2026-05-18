@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { stringify as stringifyYaml } from "yaml";
 import { CONFIG_PATH, expandHome } from "@maestroq/core";
-import { discoverAllDevices, type DiscoverDeps, type DiscoveredDevice } from "./discover.js";
+import { stringify as stringifyYaml } from "yaml";
+import { type DiscoverDeps, type DiscoveredDevice, discoverAllDevices } from "./discover.js";
 
 interface PackageJson {
   scripts?: Record<string, string>;
@@ -77,7 +77,9 @@ export function initConfig(opts: InitOptions): InitResult {
     parts.push("no devices found — edit the file to add UDIDs");
   }
   if (specsWritten.length > 0) {
-    parts.push(`scaffolded ${specsWritten.length} starter spec${specsWritten.length === 1 ? "" : "s"}`);
+    parts.push(
+      `scaffolded ${specsWritten.length} starter spec${specsWritten.length === 1 ? "" : "s"}`,
+    );
   }
   return { message: parts.join(" — "), discovered, specsWritten };
 }

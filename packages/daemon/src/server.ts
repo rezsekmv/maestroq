@@ -1,18 +1,18 @@
+import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
-import { chmodSync, mkdirSync, unlinkSync, writeFileSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
   encodeMessage,
   MAESTROQ_HOME,
   PID_PATH,
-  RpcRequestSchema,
-  SOCKET_PATH,
   type RpcEvent,
   type RpcRequest,
+  RpcRequestSchema,
+  SOCKET_PATH,
 } from "@maestroq/core";
+import type { Dispatcher } from "./dispatcher.js";
 import { logger } from "./logger.js";
 import type { JobQueue } from "./queue.js";
-import type { Dispatcher } from "./dispatcher.js";
 
 export interface DaemonServerOptions {
   queue: JobQueue;
@@ -75,7 +75,11 @@ export function startDaemonServer(opts: DaemonServerOptions): Server {
   opts.dispatcher.on("event", (ev: RpcEvent) => {
     for (const c of clients) {
       if (ev.kind === "log") {
-        if (c.followingJobId && "jobId" in ev && (ev as { jobId?: string }).jobId === c.followingJobId) {
+        if (
+          c.followingJobId &&
+          "jobId" in ev &&
+          (ev as { jobId?: string }).jobId === c.followingJobId
+        ) {
           send(c.socket, ev);
         }
         continue;
@@ -110,11 +114,7 @@ function send(socket: Socket, ev: RpcEvent): void {
   socket.write(encodeMessage(ev));
 }
 
-async function handleLine(
-  client: Client,
-  line: string,
-  opts: DaemonServerOptions,
-): Promise<void> {
+async function handleLine(client: Client, line: string, opts: DaemonServerOptions): Promise<void> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
@@ -175,12 +175,18 @@ async function dispatchRequest(
       if (job.logPath) {
         try {
           const existing = readFileSync(job.logPath, "utf8");
-          for (const line of existing.split("\n")) if (line) send(client.socket, { kind: "log", line });
+          for (const line of existing.split("\n"))
+            if (line) send(client.socket, { kind: "log", line });
         } catch {
           // file may not exist yet
         }
       }
-      if (req.follow && job.status !== "succeeded" && job.status !== "failed" && job.status !== "cancelled") {
+      if (
+        req.follow &&
+        job.status !== "succeeded" &&
+        job.status !== "failed" &&
+        job.status !== "cancelled"
+      ) {
         client.followingJobId = job.id;
       } else {
         send(client.socket, { kind: "end" });

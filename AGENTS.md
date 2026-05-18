@@ -8,7 +8,7 @@ Onboarding for AI coding agents (and humans) working on this repo. Read this top
 
 A local job queue + daemon that owns a pool of simulators/emulators on one machine and dispatches Maestro test runs to them. Built so multiple AI agents working in parallel git worktrees of a React Native / Expo app can share the same Mac without racing the simulator.
 
-The original design plan is `/Users/vencel/.claude/plans/hello-here-is-a-federated-goblet.md` — it's the source of truth for scope and intent. If you're about to change something architectural, read that first.
+The v0.1 scope is a local daemon and CLI that share a single Mac's simulators and emulators across parallel worktrees without racing.
 
 ---
 
@@ -176,7 +176,7 @@ Per-project specs and per-project config live under `.maestro/` at the project r
 
 - **Conventional Commits.** Subject: `<type>: <imperative summary>` (or `<type>(<scope>): …`). Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`. Bump level still comes from the `.changeset/*.md` file — the prefix is for readability, not versioning.
 - **Keep it short.** Subject ≤ 60 chars. Body only when the *why* isn't obvious from the diff. No multi-paragraph rationale — that belongs in the changeset or PR description.
-- **Never sign commits with a `Co-Authored-By: Claude …` line** (per `/Users/vencel/.claude/CLAUDE.md`). The user's git config identity is the only author.
+- **Never sign commits with a `Co-Authored-By: Claude …` line.** The git config identity is the only author.
 - For larger changes, the global rule says to run `coderabbit review --plain`. The user's call when to do that — don't volunteer.
 
 ### Code style
@@ -231,7 +231,7 @@ AND=$(maestroq submit maestroq/smoke-android.yaml)
 maestroq status --json | python3 -c '...'   # confirm both reach `running` simultaneously
 ```
 
-The verification matrix in the plan file (`hello-here-is-a-federated-goblet.md`, "Verification (v0.1)") covers eleven scenarios — when in doubt, run those.
+When in doubt, walk through the verification matrix in `docs/architecture.md` end-to-end against a real device pair.
 
 ---
 
@@ -301,11 +301,3 @@ The very first release is published manually (see the README quick start of this
 2. Check `~/.local/share/maestroq/logs/<job-id>.log` — every external child's output lands there.
 3. Check the daemon's own log (wherever you redirected `maestroq daemon start` to). pino emits JSON; pipe through `pino-pretty` if you have it.
 4. `pgrep -fl maestro` / `pgrep -fl xcodebuild` — leftover children are the most likely cause of "the next run fails inexplicably". The daemon does *not* yet pkill orphaned xctest-runners on teardown (see "iOS port 7001 staleness" above).
-
----
-
-## Memory files
-
-The user keeps long-lived facts at `~/.claude/projects/-Users-vencel-gitRepos--home-maestroq/memory/`. Check that directory for the current set — the index lives in `MEMORY.md` next to the entries. Topics covered so far include upstream maestro sharp edges, commit-message preferences, and OSS hygiene rules.
-
-If you discover another upstream sharp edge or a non-obvious convention, save it as a memory rather than relying on AGENTS.md alone — memories persist across conversations and survive AGENTS.md rewrites.

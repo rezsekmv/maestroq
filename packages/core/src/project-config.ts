@@ -20,12 +20,7 @@ export const ProjectConfigSchema = z.object({
           z.literal("skip"),
         ])
         .optional(),
-      metro: z
-        .union([
-          z.object({ reuse: z.boolean().optional() }),
-          z.literal("skip"),
-        ])
-        .optional(),
+      metro: z.union([z.object({ reuse: z.boolean().optional() }), z.literal("skip")]).optional(),
       env: z.record(z.string(), z.string()).optional(),
       priority: z.number().int().optional(),
     })

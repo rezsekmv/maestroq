@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ConfigSchema, type DeviceConfig, JobSpecSchema } from "@maestroq/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ConfigSchema, JobSpecSchema, type DeviceConfig } from "@maestroq/core";
 import { Dispatcher } from "../src/dispatcher.js";
 import { MetroPortPool } from "../src/metro-pool.js";
 import { JobQueue } from "../src/queue.js";
@@ -74,7 +74,10 @@ describe("Dispatcher iOS concurrency cap", () => {
 
     dispatcher.tick();
 
-    const busy = workers.filter((w) => w.isBusy()).map((w) => w.udid).sort();
+    const busy = workers
+      .filter((w) => w.isBusy())
+      .map((w) => w.udid)
+      .sort();
     expect(busy.filter((u) => u.startsWith("ios-")).length).toBe(1);
     expect(busy).toContain("droid-a");
   });
@@ -94,7 +97,10 @@ describe("Dispatcher iOS concurrency cap", () => {
 
     dispatcher.tick();
 
-    const busy = workers.filter((w) => w.isBusy()).map((w) => w.udid).sort();
+    const busy = workers
+      .filter((w) => w.isBusy())
+      .map((w) => w.udid)
+      .sort();
     expect(busy).toEqual(["droid-a", "ios-a", "ios-b"]);
   });
 });

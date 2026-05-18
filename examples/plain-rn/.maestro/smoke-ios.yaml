@@ -1,3 +1,4 @@
+# cwd inferred from the project root; override if running from a workspace dir
 platform: ios
 flows:
   - .maestro/smoke.yaml

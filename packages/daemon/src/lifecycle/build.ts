@@ -1,5 +1,5 @@
-import { execa, type ResultPromise } from "execa";
 import type { DeviceConfig, JobSpec, Variant } from "@maestroq/core";
+import { execa, type ResultPromise } from "execa";
 
 export interface BuildOptions {
   spec: JobSpec;

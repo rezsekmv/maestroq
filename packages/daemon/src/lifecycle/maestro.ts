@@ -1,5 +1,5 @@
-import { execa } from "execa";
 import type { DeviceConfig, JobSpec, Runner } from "@maestroq/core";
+import { execa } from "execa";
 
 export interface MaestroOptions {
   spec: JobSpec;
@@ -80,7 +80,9 @@ export async function runMaestro(opts: MaestroOptions): Promise<MaestroResult> {
         try {
           process.kill(-pgid, "SIGKILL");
           killedAfterFinalize = true;
-          logSink(`[maestro] watchdog: child did not exit ${finalizeTimeoutMs}ms after finalize, SIGKILLed`);
+          logSink(
+            `[maestro] watchdog: child did not exit ${finalizeTimeoutMs}ms after finalize, SIGKILLed`,
+          );
         } catch (err) {
           const code = (err as NodeJS.ErrnoException).code;
           if (code !== "ESRCH") logSink(`[maestro] watchdog kill failed: ${String(err)}`);

@@ -47,10 +47,9 @@ describe("filterJobsBySince", () => {
   });
 
   it("returns empty when single-job payload is too old", () => {
-    const result = filterJobsBySince(
-      { jobs: { createdAt: now - 7_200_000 } },
-      3_600_000,
-    ) as { jobs: unknown[] };
+    const result = filterJobsBySince({ jobs: { createdAt: now - 7_200_000 } }, 3_600_000) as {
+      jobs: unknown[];
+    };
     expect(result.jobs).toEqual([]);
   });
 

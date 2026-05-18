@@ -1,6 +1,6 @@
-import { createConnection, type Socket } from "node:net";
 import { existsSync } from "node:fs";
-import { SOCKET_PATH, type RpcEvent, type RpcRequest, encodeMessage } from "@maestroq/core";
+import { createConnection, type Socket } from "node:net";
+import { encodeMessage, type RpcEvent, type RpcRequest, SOCKET_PATH } from "@maestroq/core";
 
 export const DAEMON_HINT =
   "daemon not running; run `maestroq daemon start` (see docs/launchd.md to install as a service)";

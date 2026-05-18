@@ -1,9 +1,9 @@
 import { EventEmitter } from "node:events";
 import type { Config, DeviceConfig } from "@maestroq/core";
-import type { JobQueue } from "./queue.js";
-import type { MetroPortPool } from "./metro-pool.js";
-import { Worker, type WorkerEvent } from "./worker.js";
 import { logger } from "./logger.js";
+import type { MetroPortPool } from "./metro-pool.js";
+import type { JobQueue } from "./queue.js";
+import { Worker, type WorkerEvent } from "./worker.js";
 
 export class Dispatcher extends EventEmitter {
   private readonly workers: Worker[];

@@ -44,10 +44,7 @@ describe("findProjectConfig", () => {
 
 describe("mergeProjectConfigIntoSpec", () => {
   it("spec values always win over project defaults", () => {
-    writeProjectConfig(
-      dir,
-      "defaults:\n  rebootSimBefore: true\n  priority: 5\n",
-    );
+    writeProjectConfig(dir, "defaults:\n  rebootSimBefore: true\n  priority: 5\n");
     const found = findProjectConfig(dir);
     if (!found) throw new Error("expected project config");
     const merged = mergeProjectConfigIntoSpec(
@@ -55,7 +52,7 @@ describe("mergeProjectConfigIntoSpec", () => {
         flows: ["a.yaml"],
         platform: "ios",
         rebootSimBefore: false, // spec wins
-        priority: 10,           // spec wins
+        priority: 10, // spec wins
       },
       found,
     );
@@ -64,16 +61,10 @@ describe("mergeProjectConfigIntoSpec", () => {
   });
 
   it("fills gaps from project defaults when spec omits them", () => {
-    writeProjectConfig(
-      dir,
-      "defaults:\n  rebootSimBefore: true\n  build:\n    variant: debug\n",
-    );
+    writeProjectConfig(dir, "defaults:\n  rebootSimBefore: true\n  build:\n    variant: debug\n");
     const found = findProjectConfig(dir);
     if (!found) throw new Error("expected project config");
-    const merged = mergeProjectConfigIntoSpec(
-      { flows: ["a.yaml"], platform: "ios" },
-      found,
-    );
+    const merged = mergeProjectConfigIntoSpec({ flows: ["a.yaml"], platform: "ios" }, found);
     expect(merged.rebootSimBefore).toBe(true);
     expect(merged.build).toEqual({ variant: "debug" });
   });
@@ -82,10 +73,7 @@ describe("mergeProjectConfigIntoSpec", () => {
     writeProjectConfig(dir, "defaults: {}\n");
     const found = findProjectConfig(dir);
     if (!found) throw new Error("expected project config");
-    const merged = mergeProjectConfigIntoSpec(
-      { flows: ["a.yaml"], platform: "ios" },
-      found,
-    );
+    const merged = mergeProjectConfigIntoSpec({ flows: ["a.yaml"], platform: "ios" }, found);
     expect(merged.cwd).toBe(dir);
   });
 
@@ -93,18 +81,12 @@ describe("mergeProjectConfigIntoSpec", () => {
     writeProjectConfig(dir, "cwd: ./packages/app\n");
     const found = findProjectConfig(dir);
     if (!found) throw new Error("expected project config");
-    const merged = mergeProjectConfigIntoSpec(
-      { flows: ["a.yaml"], platform: "ios" },
-      found,
-    );
+    const merged = mergeProjectConfigIntoSpec({ flows: ["a.yaml"], platform: "ios" }, found);
     expect(merged.cwd).toBe(join(dir, "packages", "app"));
   });
 
   it("merges env with spec values winning per-key", () => {
-    writeProjectConfig(
-      dir,
-      "defaults:\n  env:\n    FOO: project\n    BAR: project\n",
-    );
+    writeProjectConfig(dir, "defaults:\n  env:\n    FOO: project\n    BAR: project\n");
     const found = findProjectConfig(dir);
     if (!found) throw new Error("expected project config");
     const merged = mergeProjectConfigIntoSpec(
@@ -126,9 +108,7 @@ describe("resolveSpecPath", () => {
     writeFileSync(join(maestroDir, "smoke-ios.yaml"), "flows: [a]\nplatform: ios\n");
     const deep = join(dir, "src", "deep");
     mkdirSync(deep, { recursive: true });
-    expect(resolveSpecPath("smoke-ios", deep)).toBe(
-      join(maestroDir, "smoke-ios.yaml"),
-    );
+    expect(resolveSpecPath("smoke-ios", deep)).toBe(join(maestroDir, "smoke-ios.yaml"));
   });
 
   it("returns an explicit relative path unchanged when it contains a slash", () => {

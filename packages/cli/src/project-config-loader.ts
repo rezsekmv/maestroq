@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { type JobSpecInput, type ProjectConfig, ProjectConfigSchema } from "@maestroq/core";
 import { parse as parseYaml } from "yaml";
-import { ProjectConfigSchema, type JobSpecInput, type ProjectConfig } from "@maestroq/core";
 
 const MAX_WALK = 16;
 
@@ -51,7 +51,10 @@ export function mergeProjectConfigIntoSpec(
     }
   }
   if (projectDefaults.env) {
-    merged.env = { ...projectDefaults.env, ...((merged.env as Record<string, string> | undefined) ?? {}) };
+    merged.env = {
+      ...projectDefaults.env,
+      ...((merged.env as Record<string, string> | undefined) ?? {}),
+    };
   }
   return merged as JobSpecInput;
 }

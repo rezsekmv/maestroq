@@ -3,15 +3,15 @@ import { createWriteStream, mkdirSync, type WriteStream } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Config, DeviceConfig, JobRecord, JobStatus } from "@maestroq/core";
 import { expandHome } from "@maestroq/core";
-import { logger } from "./logger.js";
-import type { JobQueue } from "./queue.js";
-import type { MetroPortPool } from "./metro-pool.js";
-import { decideCache, recordSuccessfulBuild, gitHead, hashEnv } from "./build-cache.js";
+import { decideCache, gitHead, hashEnv, recordSuccessfulBuild } from "./build-cache.js";
 import { bootDevice } from "./lifecycle/boot.js";
 import { buildApp } from "./lifecycle/build.js";
-import { startMetro, type MetroHandle } from "./lifecycle/metro.js";
 import { runMaestro } from "./lifecycle/maestro.js";
+import { type MetroHandle, startMetro } from "./lifecycle/metro.js";
 import { teardownJob } from "./lifecycle/teardown.js";
+import { logger } from "./logger.js";
+import type { MetroPortPool } from "./metro-pool.js";
+import type { JobQueue } from "./queue.js";
 
 export type WorkerEvent =
   | { kind: "status"; jobId: string; status: JobStatus; exitCode?: number; failureReason?: string }
@@ -233,7 +233,11 @@ export class Worker extends EventEmitter {
     }
   }
 
-  private cancelledCheck(jobId: string, sink: (l: string) => void, logStream: WriteStream): boolean {
+  private cancelledCheck(
+    jobId: string,
+    sink: (l: string) => void,
+    logStream: WriteStream,
+  ): boolean {
     if (!this.cancelled.has(jobId)) return false;
     sink("[cancel] requested before stage advanced");
     this.queue.update(jobId, { finishedAt: Date.now(), failureReason: "cancelled" });

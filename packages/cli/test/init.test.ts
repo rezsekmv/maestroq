@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
-import { initConfig } from "../src/init.js";
 import type { DiscoverDeps } from "../src/discover.js";
+import { initConfig } from "../src/init.js";
 
 let dir: string;
 let configPath: string;
@@ -125,7 +125,12 @@ describe("initConfig starter specs", () => {
       }
       return { stdout: "", status: 1 };
     };
-    const result = initConfig({ cwd: dir, fromPackageJson: false, configPath, discoverDeps: { run } });
+    const result = initConfig({
+      cwd: dir,
+      fromPackageJson: false,
+      configPath,
+      discoverDeps: { run },
+    });
     expect(result.specsWritten).toHaveLength(1);
     expect(existsSync(join(dir, ".maestro", "smoke-ios.yaml"))).toBe(true);
     const spec = readFileSync(join(dir, ".maestro", "smoke-ios.yaml"), "utf8");
@@ -147,7 +152,12 @@ describe("initConfig starter specs", () => {
       }
       return { stdout: "", status: 1 };
     };
-    const result = initConfig({ cwd: dir, fromPackageJson: false, configPath, discoverDeps: { run } });
+    const result = initConfig({
+      cwd: dir,
+      fromPackageJson: false,
+      configPath,
+      discoverDeps: { run },
+    });
     expect(result.specsWritten).toEqual([]);
   });
 

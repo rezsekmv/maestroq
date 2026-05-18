@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { execa } from "execa";
 import type { JobSpec, Variant } from "@maestroq/core";
+import { execa } from "execa";
 import { logger } from "./logger.js";
 
 export interface CacheKey {
@@ -60,11 +60,7 @@ export async function decideCache(
   const key: CacheKey = { cwd: spec.cwd, head, platform: spec.platform, variant, envHash };
   const prior = lastBuilds.get(`${keyId(key)}::${deviceKey}`);
   if (!prior) return { use: false, reason: "no-prior-build", key };
-  if (
-    prior.head === key.head &&
-    prior.envHash === key.envHash &&
-    prior.variant === key.variant
-  ) {
+  if (prior.head === key.head && prior.envHash === key.envHash && prior.variant === key.variant) {
     return { use: true, reason: "clean-hit", key };
   }
   return { use: false, reason: "key-mismatch", key };

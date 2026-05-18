@@ -21,9 +21,7 @@ export const JobSpecSchema = z.object({
   cwd: z.string().min(1),
   flows: z.array(z.string().min(1)).min(1),
   platform: PlatformSchema,
-  build: z
-    .union([BuildSpecSchema, z.literal("skip")])
-    .default({ variant: "release", cache: true }),
+  build: z.union([BuildSpecSchema, z.literal("skip")]).default({ variant: "release", cache: true }),
   metro: z.union([MetroSpecSchema, z.literal("skip")]).default("skip"),
   env: z.record(z.string(), z.string()).default({}),
   priority: z.number().int().default(0),

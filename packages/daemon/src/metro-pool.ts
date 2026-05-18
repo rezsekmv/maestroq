@@ -18,7 +18,10 @@ export class MetroPortPool {
       const existing = this.byWorktree.get(worktreeKey);
       if (existing) {
         existing.refCount += 1;
-        logger.debug({ worktreeKey, port: existing.port, refCount: existing.refCount }, "metro: reused");
+        logger.debug(
+          { worktreeKey, port: existing.port, refCount: existing.refCount },
+          "metro: reused",
+        );
         return existing;
       }
     }

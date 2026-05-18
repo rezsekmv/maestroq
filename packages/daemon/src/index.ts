@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync } from "node:fs";
 import {
   CONFIG_PATH,
+  type Config,
   ConfigSchema,
+  loadConfig,
   MAESTROQ_HOME,
   QUEUE_PATH,
-  loadConfig,
-  type Config,
 } from "@maestroq/core";
 import { Dispatcher } from "./dispatcher.js";
 import { logger } from "./logger.js";
@@ -21,9 +21,7 @@ export interface StartDaemonOptions {
 export async function startDaemon(opts: StartDaemonOptions = {}): Promise<void> {
   mkdirSync(MAESTROQ_HOME, { recursive: true });
   const configPath = opts.configPath ?? CONFIG_PATH;
-  const config: Config = existsSync(configPath)
-    ? loadConfig(configPath)
-    : ConfigSchema.parse({});
+  const config: Config = existsSync(configPath) ? loadConfig(configPath) : ConfigSchema.parse({});
 
   const queue = new JobQueue(QUEUE_PATH);
   queue.load();
@@ -50,7 +48,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 }
 
-export * from "./queue.js";
-export * from "./recovery.js";
 export * from "./build-cache.js";
 export * from "./metro-pool.js";
+export * from "./queue.js";
+export * from "./recovery.js";

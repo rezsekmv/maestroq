@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { JobSpecSchema } from "@maestroq/core";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { JobQueue } from "../src/queue.js";
 
 let dir: string;
@@ -79,7 +79,9 @@ describe("JobQueue", () => {
     expect(q.get(a.id)?.failureReason).toBe("daemon-crash");
     expect(q.get(b.id)?.status).toBe("queued");
 
-    const persisted = JSON.parse(readFileSync(path, "utf8")) as { jobs: Array<{ id: string; status: string }> };
+    const persisted = JSON.parse(readFileSync(path, "utf8")) as {
+      jobs: Array<{ id: string; status: string }>;
+    };
     expect(persisted.jobs.find((j) => j.id === a.id)?.status).toBe("failed");
   });
 });

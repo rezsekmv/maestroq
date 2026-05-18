@@ -1,5 +1,5 @@
-import { execa } from "execa";
 import type { DeviceConfig } from "@maestroq/core";
+import { execa } from "execa";
 
 export interface BootOptions {
   device: DeviceConfig;
