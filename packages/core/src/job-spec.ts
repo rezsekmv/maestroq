@@ -70,5 +70,6 @@ export const JobRecordSchema = z.object({
   failureReason: z.string().optional(),
   exitCode: z.number().optional(),
   logPath: z.string().optional(),
+  artifactDir: z.string().optional(),
 });
 export type JobRecord = z.infer<typeof JobRecordSchema>;
