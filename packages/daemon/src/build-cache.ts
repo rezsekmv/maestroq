@@ -26,9 +26,15 @@ export function loadPersistedCache(path: string = BUILD_CACHE_PATH): void {
   cachePath = path;
   try {
     const raw = readFileSync(path, "utf8");
-    const entries = JSON.parse(raw) as Array<[string, CacheKey]>;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) throw new Error("cache file is not an array");
     lastBuilds.clear();
-    for (const [k, v] of entries) lastBuilds.set(k, v);
+    for (const entry of parsed) {
+      if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string") {
+        throw new Error("invalid cache entry format");
+      }
+      lastBuilds.set(entry[0] as string, entry[1] as CacheKey);
+    }
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code !== "ENOENT") {
