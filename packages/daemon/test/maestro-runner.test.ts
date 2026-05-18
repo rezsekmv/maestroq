@@ -1,8 +1,8 @@
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { JobSpecSchema } from "@maestroq/core";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runMaestro } from "../src/lifecycle/maestro.js";
 
 let dir: string;
@@ -22,10 +22,7 @@ afterEach(() => {
 
 function installFakeRunner(body: string): void {
   const path = join(dir, "maestro-runner");
-  writeFileSync(
-    path,
-    `#!/bin/sh\nprintf '%s\\n' "$@" > "${argsFile}"\n${body}\n`,
-  );
+  writeFileSync(path, `#!/bin/sh\nprintf '%s\\n' "$@" > "${argsFile}"\n${body}\n`);
   chmodSync(path, 0o755);
   process.env.PATH = `${dir}:${process.env.PATH ?? ""}`;
 }

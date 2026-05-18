@@ -11,7 +11,10 @@ export interface DiscoverDeps {
   run?: (cmd: string, args: readonly string[]) => { stdout: string; status: number | null };
 }
 
-const defaultRun = (cmd: string, args: readonly string[]): { stdout: string; status: number | null } => {
+const defaultRun = (
+  cmd: string,
+  args: readonly string[],
+): { stdout: string; status: number | null } => {
   const r = spawnSync(cmd, args, { encoding: "utf8" });
   return { stdout: r.stdout ?? "", status: r.status };
 };
@@ -61,7 +64,10 @@ function avdNameFor(udid: string, deps: DiscoverDeps): string | undefined {
   const run = deps.run ?? defaultRun;
   const r = run("adb", ["-s", udid, "emu", "avd", "name"]);
   if (r.status !== 0 || !r.stdout) return undefined;
-  const first = r.stdout.split("\n").map((l) => l.trim()).find((l) => l && l !== "OK");
+  const first = r.stdout
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l && l !== "OK");
   return first || undefined;
 }
 

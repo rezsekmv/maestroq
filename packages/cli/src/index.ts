@@ -2,19 +2,10 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { type JobSpec, JobSpecSchema, PID_PATH, type RpcEvent, SOCKET_PATH } from "@maestroq/core";
 import { defineCommand, runMain } from "citty";
 import { parse as parseYaml } from "yaml";
-import {
-  JobSpecSchema,
-  PID_PATH,
-  SOCKET_PATH,
-  type JobSpec,
-  type RpcEvent,
-} from "@maestroq/core";
-import {
-  DaemonNotRunningError,
-  connect,
-} from "./rpc-client.js";
+import { type ColorMode, resolveUseColor } from "./color.js";
 import { defaultConfigPath, initConfig } from "./init.js";
 import {
   findProjectConfig,
@@ -22,8 +13,8 @@ import {
   resolveSpecPath,
 } from "./project-config-loader.js";
 import { printDevices, printEvent, printJobs } from "./render.js";
+import { connect, DaemonNotRunningError } from "./rpc-client.js";
 import { DEFAULT_LIMIT, filterJobs, parseLimit, parseSince } from "./since.js";
-import { type ColorMode, resolveUseColor } from "./color.js";
 
 function colorMode(raw: string | boolean | undefined): ColorMode {
   if (raw === undefined || raw === "" || raw === true) return "auto";
@@ -190,9 +181,10 @@ const status = defineCommand({
     color: { type: "string", description: "auto (default) | always | never" },
   },
   async run({ args }) {
-    const filterOpts = args.jobId || args.all
-      ? { sinceMs: null, maxCount: null }
-      : { sinceMs: parseSince(args.since), maxCount: parseLimit(args.limit) };
+    const filterOpts =
+      args.jobId || args.all
+        ? { sinceMs: null, maxCount: null }
+        : { sinceMs: parseSince(args.since), maxCount: parseLimit(args.limit) };
 
     const useColor = resolveUseColor(colorMode(args.color));
 
@@ -248,7 +240,6 @@ function parseWatchInterval(raw: string | undefined): number {
   if (!Number.isFinite(n) || n <= 0) return 2_000;
   return Math.max(500, Math.floor(n * 1000));
 }
-
 
 const logs = defineCommand({
   meta: { name: "logs", description: "Print logs for a job; -f to follow" },
@@ -359,7 +350,9 @@ const configEdit = defineCommand({
     const editor = process.env.EDITOR ?? "vi";
     const child = spawn(editor, [defaultConfigPath()], { stdio: "inherit" });
     await new Promise<void>((resolve, reject) => {
-      child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`editor exit ${code}`))));
+      child.on("exit", (code) =>
+        code === 0 ? resolve() : reject(new Error(`editor exit ${code}`)),
+      );
       child.on("error", reject);
     });
   },

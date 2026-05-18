@@ -1,9 +1,9 @@
+import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { JobSpecSchema } from "@maestroq/core";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { JobQueue } from "../src/queue.js";
 import { sweepStaleProcessGroups } from "../src/recovery.js";
 

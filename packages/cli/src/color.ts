@@ -15,7 +15,10 @@ const ANSI = {
 
 export type ColorMode = "auto" | "always" | "never";
 
-export function resolveUseColor(mode: ColorMode, stream: NodeJS.WriteStream = process.stdout): boolean {
+export function resolveUseColor(
+  mode: ColorMode,
+  stream: NodeJS.WriteStream = process.stdout,
+): boolean {
   if (mode === "always") return true;
   if (mode === "never") return false;
   if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "") return false;

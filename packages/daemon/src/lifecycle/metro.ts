@@ -1,5 +1,5 @@
-import { execa, type ResultPromise } from "execa";
 import type { JobSpec } from "@maestroq/core";
+import { execa, type ResultPromise } from "execa";
 import type { MetroLease, MetroPortPool } from "../metro-pool.js";
 
 export interface MetroHandle {
@@ -48,7 +48,8 @@ export async function startMetro(opts: StartMetroOptions): Promise<MetroHandle> 
   liveMetros.set(lease.port, { child });
   if (child.pid) pool.attachPid(lease.port, child.pid);
   child.all?.on("data", (chunk: Buffer) => {
-    for (const line of chunk.toString("utf8").split(/\r?\n/)) if (line) logSink(`[metro:${lease.port}] ${line}`);
+    for (const line of chunk.toString("utf8").split(/\r?\n/))
+      if (line) logSink(`[metro:${lease.port}] ${line}`);
   });
   child.catch(() => undefined);
 

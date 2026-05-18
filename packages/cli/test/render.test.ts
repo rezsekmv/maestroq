@@ -1,5 +1,5 @@
+import { type JobRecord, JobSpecSchema } from "@maestroq/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { JobSpecSchema, type JobRecord } from "@maestroq/core";
 import { printJobs } from "../src/render.js";
 
 let writeSpy: ReturnType<typeof vi.spyOn>;
@@ -39,14 +39,20 @@ function job(overrides: Partial<JobRecord> = {}): JobRecord {
 describe("printJobs short (default)", () => {
   it("emits the 5-col short view without a header by default", () => {
     printJobs({ jobs: [job()] });
-    const lines = output.trimEnd().split("\n").map((l) => l.trimEnd());
+    const lines = output
+      .trimEnd()
+      .split("\n")
+      .map((l) => l.trimEnd());
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/^11111111\s+x\s+ios\s+queued\s+-$/);
   });
 
   it("short header is ID WORKTREE PLAT STATUS DUR (no CREATED/STARTED/EXIT/LABEL)", () => {
     printJobs({ jobs: [job()] }, { header: true });
-    const lines = output.trimEnd().split("\n").map((l) => l.trimEnd());
+    const lines = output
+      .trimEnd()
+      .split("\n")
+      .map((l) => l.trimEnd());
     expect(lines[0]).toMatch(/^ID\s+WORKTREE\s+PLAT\s+STATUS\s+DUR$/);
     expect(lines[0]).not.toMatch(/CREATED|STARTED|EXIT|LABEL/);
   });
@@ -56,7 +62,9 @@ describe("printJobs long (-l/--long)", () => {
   it("includes WORKTREE, CREATED, STARTED, EXIT", () => {
     printJobs({ jobs: [job()] }, { header: true, long: true });
     const lines = output.trimEnd().split("\n");
-    expect(lines[0]).toMatch(/^ID\s+WORKTREE\s+PLAT\s+STATUS\s+CREATED\s+STARTED\s+DUR\s+EXIT\s+LABEL$/);
+    expect(lines[0]).toMatch(
+      /^ID\s+WORKTREE\s+PLAT\s+STATUS\s+CREATED\s+STARTED\s+DUR\s+EXIT\s+LABEL$/,
+    );
     expect(lines[1]).toMatch(/^11111111\s+x\s+ios\s+queued\s+\d+s\s+-\s+-\s+-\s+smoke iOS$/);
   });
 
@@ -112,7 +120,9 @@ describe("printJobs colors", () => {
   it("wraps STATUS in red for failed and EXIT in red for non-zero", () => {
     printJobs(
       {
-        jobs: [job({ status: "failed", startedAt: now - 30_000, finishedAt: now - 5_000, exitCode: 1 })],
+        jobs: [
+          job({ status: "failed", startedAt: now - 30_000, finishedAt: now - 5_000, exitCode: 1 }),
+        ],
       },
       { long: true, color: true },
     );
@@ -128,10 +138,7 @@ describe("printJobs colors", () => {
   it("never bolds any row", () => {
     printJobs(
       {
-        jobs: [
-          job({ status: "running", startedAt: now - 5_000 }),
-          job({ status: "queued" }),
-        ],
+        jobs: [job({ status: "running", startedAt: now - 5_000 }), job({ status: "queued" })],
       },
       { color: true },
     );

@@ -2,7 +2,8 @@ import type { JobRecord, RpcEvent } from "@maestroq/core";
 import { colorExit, colorStatus, paint } from "./color.js";
 
 export function printDevices(payload: unknown, opts: { color?: boolean } = {}): void {
-  const devices = (payload as { devices: Array<{ udid: string; platform: string; busy: boolean }> }).devices;
+  const devices = (payload as { devices: Array<{ udid: string; platform: string; busy: boolean }> })
+    .devices;
   if (!devices.length) {
     process.stdout.write("(no devices configured — edit ~/.maestroq/config.yaml)\n");
     return;
@@ -42,7 +43,11 @@ const STATUS_COL: Column = {
   value: (j) => j.status,
   paint: (j) => colorStatus(j.status),
 };
-const CREATED_COL: Column = { name: "CREATED", width: 8, value: (j, now) => relTime(j.createdAt, now) };
+const CREATED_COL: Column = {
+  name: "CREATED",
+  width: 8,
+  value: (j, now) => relTime(j.createdAt, now),
+};
 const STARTED_COL: Column = {
   name: "STARTED",
   width: 8,
@@ -102,7 +107,9 @@ export function printJobs(payload: unknown, opts: PrintJobsOptions = {}): void {
   const cols = opts.long ? LONG_COLUMNS : SHORT_COLUMNS;
   const now = Date.now();
   if (opts.header) {
-    process.stdout.write(`${cols.map((c) => (c.width ? c.name.padEnd(c.width) : c.name)).join(" ")}\n`);
+    process.stdout.write(
+      `${cols.map((c) => (c.width ? c.name.padEnd(c.width) : c.name)).join(" ")}\n`,
+    );
   }
   for (const j of list) {
     const row = cols

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { colorExit, colorStatus, paint, resolveUseColor } from "../src/color.js";
 
 const fakeStream = (isTTY: boolean): NodeJS.WriteStream =>
-  ({ isTTY } as unknown as NodeJS.WriteStream);
+  ({ isTTY }) as unknown as NodeJS.WriteStream;
 
 const env: NodeJS.ProcessEnv = {};
 

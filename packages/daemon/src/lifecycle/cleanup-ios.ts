@@ -8,10 +8,7 @@ export type LogSink = (line: string) => void;
 // "Failed to connect to /127.0.0.1:7001". The pgid-based teardown in the worker
 // only kills processes we tracked; these grandchildren detach themselves.
 export async function cleanupIosLeftovers(udid: string, logSink: LogSink): Promise<void> {
-  const patterns = [
-    `maestro-driver-iosUITests-Runner.*${udid}`,
-    `xcodebuild.*${udid}`,
-  ];
+  const patterns = [`maestro-driver-iosUITests-Runner.*${udid}`, `xcodebuild.*${udid}`];
   for (const pattern of patterns) {
     const result = await execa("pkill", ["-f", pattern], { reject: false });
     // pkill exits 0 if it killed something, 1 if no matches. Anything else is unexpected.
