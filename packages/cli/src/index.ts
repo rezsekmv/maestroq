@@ -19,6 +19,7 @@ import { parseWatchInterval } from "./parse-interval.js";
 import { printDevices, printEvent, printJobs } from "./render.js";
 import { connect, DaemonNotRunningError } from "./rpc-client.js";
 import { DEFAULT_LIMIT, filterJobs, parseLimit, parseSince } from "./since.js";
+import { VERSION } from "./version.js";
 
 async function callOnce(req: Parameters<Awaited<ReturnType<typeof connect>>["send"]>[0]): Promise<{
   payload?: unknown;
@@ -360,7 +361,7 @@ const config = defineCommand({
 });
 
 const main = defineCommand({
-  meta: { name: "maestroq", description: "maestroq CLI client", version: "0.1.0" },
+  meta: { name: "maestroq", description: "maestroq CLI client", version: VERSION },
   subCommands: { daemon, devices, submit, status, logs, cancel, run, init, config },
 });
 
