@@ -242,15 +242,30 @@ const logs = defineCommand({
   args: {
     jobId: { type: "positional", required: true, description: "Job id" },
     follow: { type: "boolean", alias: "f", description: "Follow the log stream" },
+    tail: {
+      type: "string",
+      description: "Show only the last N lines from the existing log",
+    },
   },
   async run({ args }) {
+    let tailLines: number | undefined;
+    if (args.tail !== undefined && args.tail !== "") {
+      const n = Number(args.tail);
+      if (!Number.isInteger(n) || n <= 0) {
+        process.stderr.write(`[maestroq] invalid --tail "${args.tail}"\n`);
+        process.exit(1);
+      }
+      tailLines = n;
+    }
     const client = await guardClient();
     try {
-      for await (const ev of client.send({
-        op: "logs",
+      const req = {
+        op: "logs" as const,
         jobId: args.jobId,
         follow: Boolean(args.follow),
-      })) {
+        ...(tailLines !== undefined ? { tailLines } : {}),
+      };
+      for await (const ev of client.send(req)) {
         printEvent(ev);
         if (ev.kind === "error") process.exitCode = 1;
       }

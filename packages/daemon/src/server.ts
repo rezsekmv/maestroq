@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { dirname } from "node:path";
 import {
@@ -194,9 +194,28 @@ async function dispatchRequest(
       }
       if (job.logPath) {
         try {
-          const existing = readFileSync(job.logPath, "utf8");
-          for (const line of existing.split("\n"))
-            if (line) send(client.socket, { kind: "log", line });
+          if (req.tailLines !== undefined) {
+            const size = statSync(job.logPath).size;
+            const MAX_BYTES = 50 * 1024 * 1024;
+            if (size > MAX_BYTES) {
+              send(client.socket, {
+                kind: "error",
+                message: `log file too large for --tail (${size} bytes > ${MAX_BYTES})`,
+              });
+              send(client.socket, { kind: "end" });
+              return;
+            }
+            const existing = readFileSync(job.logPath, "utf8");
+            const lines = existing.split("\n").filter((l) => l !== "");
+            const start = Math.max(0, lines.length - req.tailLines);
+            for (let i = start; i < lines.length; i++) {
+              send(client.socket, { kind: "log", line: lines[i] as string });
+            }
+          } else {
+            const existing = readFileSync(job.logPath, "utf8");
+            for (const line of existing.split("\n"))
+              if (line) send(client.socket, { kind: "log", line });
+          }
         } catch {
           // file may not exist yet
         }

@@ -6,7 +6,12 @@ export const RpcRequestSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("devices") }),
   z.object({ op: z.literal("submit"), spec: JobSpecSchema }),
   z.object({ op: z.literal("status"), jobId: z.string().optional() }),
-  z.object({ op: z.literal("logs"), jobId: z.string(), follow: z.boolean().default(false) }),
+  z.object({
+    op: z.literal("logs"),
+    jobId: z.string(),
+    follow: z.boolean().default(false),
+    tailLines: z.number().int().positive().optional(),
+  }),
   z.object({ op: z.literal("cancel"), jobId: z.string() }),
   z.object({ op: z.literal("shutdown") }),
   z.object({
