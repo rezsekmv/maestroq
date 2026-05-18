@@ -63,8 +63,14 @@ export function initConfig(opts: InitOptions): InitResult {
     "#   from https://github.com/devicelab-dev/maestro-runner and supports parallel\n" +
     "#   devices on iOS and Android. Set to 'maestro' to fall back to the original\n" +
     "#   Maestro CLI (https://github.com/mobile-dev-inc/Maestro) — iOS is then capped\n" +
-    "#   at one concurrent job (upstream port 7001 collision).\n";
-  writeFileSync(opts.configPath, header + stringifyYaml(config));
+    "#   at one concurrent job (upstream port 7001 collision).\n" +
+    "# defaults.max_concurrent_ios: only honored under runner: 'maestro'. Uncomment\n" +
+    "#   to override the default of 1.\n";
+  const body = stringifyYaml(config).replace(
+    /(\s{2}build_cache: true)/,
+    "$1\n  # max_concurrent_ios: 1",
+  );
+  writeFileSync(opts.configPath, header + body);
 
   const specsWritten = opts.skipSpecs ? [] : writeStarterSpecs(opts.cwd, discovered);
 
