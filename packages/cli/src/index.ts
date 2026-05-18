@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import {
   CancelResponseSchema,
   DevicesResponseSchema,
+  type JobStatus,
   PID_PATH,
   SOCKET_PATH,
   StatusResponseSchema,
@@ -18,7 +20,8 @@ import { loadSpec } from "./load-spec.js";
 import { parseWatchInterval } from "./parse-interval.js";
 import { printDevices, printEvent, printJobs } from "./render.js";
 import { connect, DaemonNotRunningError } from "./rpc-client.js";
-import { DEFAULT_LIMIT, filterJobs, parseLimit, parseSince } from "./since.js";
+import { DEFAULT_LIMIT, filterJobs, parseDuration, parseLimit, parseSince } from "./since.js";
+import { VERSION } from "./version.js";
 
 async function callOnce(req: Parameters<Awaited<ReturnType<typeof connect>>["send"]>[0]): Promise<{
   payload?: unknown;
@@ -241,15 +244,30 @@ const logs = defineCommand({
   args: {
     jobId: { type: "positional", required: true, description: "Job id" },
     follow: { type: "boolean", alias: "f", description: "Follow the log stream" },
+    tail: {
+      type: "string",
+      description: "Show only the last N lines from the existing log",
+    },
   },
   async run({ args }) {
+    let tailLines: number | undefined;
+    if (args.tail !== undefined && args.tail !== "") {
+      const n = Number(args.tail);
+      if (!Number.isInteger(n) || n <= 0) {
+        process.stderr.write(`[maestroq] invalid --tail "${args.tail}"\n`);
+        process.exit(1);
+      }
+      tailLines = n;
+    }
     const client = await guardClient();
     try {
-      for await (const ev of client.send({
-        op: "logs",
+      const req = {
+        op: "logs" as const,
         jobId: args.jobId,
         follow: Boolean(args.follow),
-      })) {
+        ...(tailLines !== undefined ? { tailLines } : {}),
+      };
+      for await (const ev of client.send(req)) {
         printEvent(ev);
         if (ev.kind === "error") process.exitCode = 1;
       }
@@ -271,12 +289,23 @@ const cancel = defineCommand({
 
 const run = defineCommand({
   meta: { name: "run", description: "Submit a job, stream logs, exit with the job's code" },
-  args: { spec: { type: "positional", description: "Path to spec.yaml", required: true } },
+  args: {
+    spec: { type: "positional", description: "Path to spec.yaml", required: true },
+    "no-stream": {
+      type: "boolean",
+      description: "Submit and poll status to completion without streaming logs",
+    },
+  },
   async run({ args }) {
     const spec = loadSpec(args.spec);
     const submission = await guard(() => callOnce({ op: "submit", spec }));
     const { jobId } = parsePayload(SubmitResponseSchema, submission.payload, "submit");
     process.stderr.write(`[maestroq] submitted ${jobId}\n`);
+
+    if (args["no-stream"]) {
+      await runNoStream(jobId);
+      return;
+    }
 
     const client = await guardClient();
     let exitCode = 0;
@@ -305,6 +334,22 @@ const run = defineCommand({
     process.exit(exitCode);
   },
 });
+
+const TERMINAL: ReadonlySet<JobStatus> = new Set<JobStatus>(["succeeded", "failed", "cancelled"]);
+
+async function runNoStream(jobId: string): Promise<never> {
+  for (;;) {
+    const r = await guard(() => callOnce({ op: "status", jobId }));
+    const payload = r.payload as { jobs?: { status: JobStatus; exitCode?: number } } | undefined;
+    const job = payload?.jobs;
+    if (job && TERMINAL.has(job.status)) {
+      process.stderr.write(`[status] ${jobId}: ${job.status}\n`);
+      const code = job.status === "succeeded" ? (job.exitCode ?? 0) : (job.exitCode ?? 1);
+      process.exit(code);
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+  }
+}
 
 const init = defineCommand({
   meta: { name: "init", description: "Create ~/.maestroq/config.yaml" },
@@ -344,7 +389,19 @@ const configEdit = defineCommand({
   meta: { name: "edit", description: "Open ~/.maestroq/config.yaml in $EDITOR" },
   async run() {
     const editor = process.env.EDITOR ?? "vi";
-    const child = spawn(editor, [defaultConfigPath()], { stdio: "inherit" });
+    const path = defaultConfigPath();
+    if (!existsSync(path)) {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(
+        path,
+        "# maestroq config — edit to add devices.\n" +
+          "devices: []\n" +
+          "defaults:\n" +
+          "  runner: maestro-runner\n" +
+          "  # max_concurrent_ios: 1\n",
+      );
+    }
+    const child = spawn(editor, [path], { stdio: "inherit" });
     await new Promise<void>((resolve, reject) => {
       child.on("exit", (code) =>
         code === 0 ? resolve() : reject(new Error(`editor exit ${code}`)),
@@ -354,15 +411,79 @@ const configEdit = defineCommand({
   },
 });
 
+const prune = defineCommand({
+  meta: { name: "prune", description: "Remove old terminal jobs (and optionally logs/artifacts)" },
+  args: {
+    "older-than": {
+      type: "string",
+      description: "Duration (e.g. 7d, 2h, 30m, 0s). Required.",
+      required: true,
+    },
+    statuses: {
+      type: "string",
+      description: "Comma-separated statuses (default: succeeded,failed,cancelled)",
+    },
+    "keep-logs": { type: "boolean", description: "Do not delete log files" },
+    "keep-artifacts": { type: "boolean", description: "Do not delete artifact directories" },
+  },
+  async run({ args }) {
+    const olderThanMs = parseDuration(String(args["older-than"]));
+    if (olderThanMs === undefined) {
+      process.stderr.write(`[maestroq] invalid --older-than "${args["older-than"]}"\n`);
+      process.exit(1);
+    }
+    let statuses: JobStatus[] | undefined;
+    if (args.statuses) {
+      const allowed: ReadonlySet<JobStatus> = new Set<JobStatus>([
+        "succeeded",
+        "failed",
+        "cancelled",
+      ]);
+      const parts = String(args.statuses)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const out: JobStatus[] = [];
+      for (const p of parts) {
+        if (!allowed.has(p as JobStatus)) {
+          process.stderr.write(`[maestroq] invalid status "${p}"\n`);
+          process.exit(1);
+        }
+        out.push(p as JobStatus);
+      }
+      statuses = out;
+    }
+    const req = {
+      op: "prune" as const,
+      olderThanMs,
+      ...(statuses ? { statuses } : {}),
+      deleteLogs: !args["keep-logs"],
+      deleteArtifacts: !args["keep-artifacts"],
+    };
+    const r = await guard(() => callOnce(req));
+    const removed = (r.payload as { removed: number } | undefined)?.removed ?? 0;
+    process.stdout.write(`Pruned ${removed} job${removed === 1 ? "" : "s"}.\n`);
+  },
+});
+
 const config = defineCommand({
   meta: { name: "config", description: "Config helpers" },
   subCommands: { edit: configEdit },
 });
 
 const main = defineCommand({
-  meta: { name: "maestroq", description: "maestroq CLI client", version: "0.1.0" },
-  subCommands: { daemon, devices, submit, status, logs, cancel, run, init, config },
+  meta: { name: "maestroq", description: "maestroq CLI client", version: VERSION },
+  subCommands: { daemon, devices, submit, status, logs, cancel, run, prune, init, config },
 });
+
+function reportUnexpected(err: unknown): never {
+  const msg = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`${msg}\n`);
+  if (process.env.DEBUG && err instanceof Error && err.stack) {
+    process.stderr.write(`${err.stack}\n`);
+  }
+  process.exit(1);
+}
 
 async function guard<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -372,7 +493,7 @@ async function guard<T>(fn: () => Promise<T>): Promise<T> {
       process.stderr.write(`${err.message}\n`);
       process.exit(2);
     }
-    throw err;
+    reportUnexpected(err);
   }
 }
 
@@ -384,7 +505,7 @@ async function guardClient(): Promise<Awaited<ReturnType<typeof connect>>> {
       process.stderr.write(`${err.message}\n`);
       process.exit(2);
     }
-    throw err;
+    reportUnexpected(err);
   }
 }
 
