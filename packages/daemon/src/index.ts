@@ -40,40 +40,49 @@ export async function startDaemon(opts: StartDaemonOptions = {}): Promise<void> 
     throw err;
   }
 
-  const configPath = opts.configPath ?? CONFIG_PATH;
-  const config: Config = existsSync(configPath) ? loadConfig(configPath) : ConfigSchema.parse({});
+  try {
+    const configPath = opts.configPath ?? CONFIG_PATH;
+    const config: Config = existsSync(configPath) ? loadConfig(configPath) : ConfigSchema.parse({});
 
-  const queue = new JobQueue(QUEUE_PATH);
-  queue.load();
+    const queue = new JobQueue(QUEUE_PATH);
+    queue.load();
 
-  const recovery = sweepStaleProcessGroups(queue);
-  if (recovery.failedJobIds.length > 0) {
-    logger.warn(
-      { killedPgids: recovery.killed, failedJobIds: recovery.failedJobIds },
-      "recovery: marked interrupted jobs as failed",
-    );
+    const recovery = sweepStaleProcessGroups(queue);
+    if (recovery.failedJobIds.length > 0) {
+      logger.warn(
+        { killedPgids: recovery.killed, failedJobIds: recovery.failedJobIds },
+        "recovery: marked interrupted jobs as failed",
+      );
+    }
+
+    const retentionMs = config.defaults.queue_retention_days * 86_400_000;
+    const pruned = queue.prune({
+      olderThanMs: retentionMs,
+      deleteLogs: true,
+      deleteArtifacts: true,
+    });
+    if (pruned > 0) {
+      logger.info(
+        { pruned, retentionDays: config.defaults.queue_retention_days },
+        "queue: pruned old terminal jobs",
+      );
+    }
+
+    loadPersistedCache();
+
+    const metroPool = new MetroPortPool(config.metro.port_range);
+    const dispatcher = new Dispatcher(queue, metroPool, config, config.devices);
+
+    startDaemonServer({ queue, dispatcher, onShutdown: release });
+    dispatcher.start();
+  } catch (err) {
+    try {
+      await release();
+    } catch (releaseErr) {
+      logger.warn({ err: releaseErr }, "daemon: failed to release lock after init error");
+    }
+    throw err;
   }
-
-  const retentionMs = config.defaults.queue_retention_days * 86_400_000;
-  const pruned = queue.prune({
-    olderThanMs: retentionMs,
-    deleteLogs: true,
-    deleteArtifacts: true,
-  });
-  if (pruned > 0) {
-    logger.info(
-      { pruned, retentionDays: config.defaults.queue_retention_days },
-      "queue: pruned old terminal jobs",
-    );
-  }
-
-  loadPersistedCache();
-
-  const metroPool = new MetroPortPool(config.metro.port_range);
-  const dispatcher = new Dispatcher(queue, metroPool, config, config.devices);
-
-  startDaemonServer({ queue, dispatcher, onShutdown: release });
-  dispatcher.start();
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
