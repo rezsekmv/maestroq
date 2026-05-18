@@ -475,6 +475,15 @@ const main = defineCommand({
   subCommands: { daemon, devices, submit, status, logs, cancel, run, prune, init, config },
 });
 
+function reportUnexpected(err: unknown): never {
+  const msg = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`${msg}\n`);
+  if (process.env.DEBUG && err instanceof Error && err.stack) {
+    process.stderr.write(`${err.stack}\n`);
+  }
+  process.exit(1);
+}
+
 async function guard<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -483,7 +492,7 @@ async function guard<T>(fn: () => Promise<T>): Promise<T> {
       process.stderr.write(`${err.message}\n`);
       process.exit(2);
     }
-    throw err;
+    reportUnexpected(err);
   }
 }
 
@@ -495,7 +504,7 @@ async function guardClient(): Promise<Awaited<ReturnType<typeof connect>>> {
       process.stderr.write(`${err.message}\n`);
       process.exit(2);
     }
-    throw err;
+    reportUnexpected(err);
   }
 }
 
