@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname } from "node:path";
 import {
   CancelResponseSchema,
   DevicesResponseSchema,
+  type JobStatus,
   PID_PATH,
   SOCKET_PATH,
   StatusResponseSchema,
