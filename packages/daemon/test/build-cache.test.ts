@@ -13,6 +13,7 @@ import {
 } from "../src/build-cache.js";
 
 let dir: string;
+let cacheDir: string;
 
 async function initRepo(): Promise<void> {
   await execa("git", ["init", "-q"], { cwd: dir });
@@ -25,12 +26,14 @@ async function initRepo(): Promise<void> {
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), "maestroq-cache-"));
-  _resetCacheForTests();
+  cacheDir = mkdtempSync(join(tmpdir(), "maestroq-cache-store-"));
+  _resetCacheForTests(join(cacheDir, "build-cache.json"));
   await initRepo();
 });
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
+  rmSync(cacheDir, { recursive: true, force: true });
 });
 
 const specFor = (overrides: { cache?: boolean } = {}) =>

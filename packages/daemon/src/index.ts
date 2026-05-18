@@ -9,6 +9,7 @@ import {
   QUEUE_PATH,
 } from "@maestroq/core";
 import { lock } from "proper-lockfile";
+import { loadPersistedCache } from "./build-cache.js";
 import { Dispatcher } from "./dispatcher.js";
 import { logger } from "./logger.js";
 import { MetroPortPool } from "./metro-pool.js";
@@ -52,6 +53,21 @@ export async function startDaemon(opts: StartDaemonOptions = {}): Promise<void> 
       "recovery: marked interrupted jobs as failed",
     );
   }
+
+  const retentionMs = config.defaults.queue_retention_days * 86_400_000;
+  const pruned = queue.prune({
+    olderThanMs: retentionMs,
+    deleteLogs: true,
+    deleteArtifacts: true,
+  });
+  if (pruned > 0) {
+    logger.info(
+      { pruned, retentionDays: config.defaults.queue_retention_days },
+      "queue: pruned old terminal jobs",
+    );
+  }
+
+  loadPersistedCache();
 
   const metroPool = new MetroPortPool(config.metro.port_range);
   const dispatcher = new Dispatcher(queue, metroPool, config, config.devices);

@@ -47,4 +47,10 @@ describe("ConfigSchema timing defaults", () => {
     expect(() => ConfigSchema.parse({ defaults: { cancel_grace_ms: 0 } })).toThrow();
     expect(() => ConfigSchema.parse({ defaults: { metro_ready_timeout_ms: -1 } })).toThrow();
   });
+
+  it("accepts zero retention days but rejects negative", () => {
+    const cfg = ConfigSchema.parse({ defaults: { queue_retention_days: 0 } });
+    expect(cfg.defaults.queue_retention_days).toBe(0);
+    expect(() => ConfigSchema.parse({ defaults: { queue_retention_days: -1 } })).toThrow();
+  });
 });

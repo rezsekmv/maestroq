@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
   ActiveStatuses,
@@ -8,6 +8,14 @@ import {
   type JobStatus,
   TerminalStatuses,
 } from "@maestroq/core";
+import { logger } from "./logger.js";
+
+export interface PruneOptions {
+  olderThanMs?: number;
+  statuses?: JobStatus[];
+  deleteLogs?: boolean;
+  deleteArtifacts?: boolean;
+}
 
 export interface QueueState {
   jobs: JobRecord[];
@@ -98,5 +106,50 @@ export class JobQueue {
   isTerminal(jobId: string): boolean {
     const job = this.get(jobId);
     return job ? TerminalStatuses.has(job.status) : false;
+  }
+
+  prune(opts: PruneOptions = {}): number {
+    const now = Date.now();
+    const allowed: ReadonlySet<JobStatus> = opts.statuses
+      ? new Set(opts.statuses)
+      : TerminalStatuses;
+    const remove: JobRecord[] = [];
+    const keep: JobRecord[] = [];
+    for (const job of this.state.jobs) {
+      const terminal = TerminalStatuses.has(job.status) && allowed.has(job.status);
+      const oldEnough =
+        opts.olderThanMs === undefined ||
+        (job.finishedAt !== undefined && job.finishedAt <= now - opts.olderThanMs);
+      if (terminal && oldEnough) remove.push(job);
+      else keep.push(job);
+    }
+    if (remove.length === 0) return 0;
+
+    if (opts.deleteLogs) {
+      for (const job of remove) {
+        if (!job.logPath) continue;
+        try {
+          unlinkSync(job.logPath);
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException).code;
+          if (code !== "ENOENT")
+            logger.warn({ err, logPath: job.logPath }, "prune: unlink log failed");
+        }
+      }
+    }
+    if (opts.deleteArtifacts) {
+      for (const job of remove) {
+        if (!job.artifactDir) continue;
+        try {
+          rmSync(job.artifactDir, { recursive: true, force: true });
+        } catch (err) {
+          logger.warn({ err, artifactDir: job.artifactDir }, "prune: rm artifacts failed");
+        }
+      }
+    }
+
+    this.state.jobs = keep;
+    this.persist();
+    return remove.length;
   }
 }

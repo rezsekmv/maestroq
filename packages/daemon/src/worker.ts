@@ -13,6 +13,10 @@ import { logger } from "./logger.js";
 import type { MetroPortPool } from "./metro-pool.js";
 import type { JobQueue } from "./queue.js";
 
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export type WorkerEvent =
   | { kind: "status"; jobId: string; status: JobStatus; exitCode?: number; failureReason?: string }
   | { kind: "log"; jobId: string; line: string }
@@ -97,7 +101,7 @@ export class Worker extends EventEmitter {
     const logDir = expandHome(this.config.log_dir);
     const artifactDir = expandHome(this.config.artifact_dir);
     mkdirSync(logDir, { recursive: true });
-    const logPath = join(logDir, `${job.id}.log`);
+    const logPath = join(logDir, todayISO(), `${job.id}.log`);
     mkdirSync(dirname(logPath), { recursive: true });
     const logStream = createWriteStream(logPath, { flags: "a" });
 
@@ -190,6 +194,7 @@ export class Worker extends EventEmitter {
 
       const jobArtifactDir = join(artifactDir, job.id);
       mkdirSync(jobArtifactDir, { recursive: true });
+      this.queue.update(job.id, { artifactDir: jobArtifactDir });
       const result = await runMaestro({
         spec: job.spec,
         device: this.device,
