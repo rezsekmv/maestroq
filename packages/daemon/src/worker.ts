@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { createWriteStream, mkdirSync, type WriteStream } from "node:fs";
+import { createWriteStream, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Config, DeviceConfig, JobRecord, JobStatus } from "@maestroq/core";
 import { expandHome } from "@maestroq/core";
@@ -105,6 +105,15 @@ export class Worker extends EventEmitter {
       this.emit("event", { kind: "log", jobId: job.id, line } satisfies WorkerEvent);
     };
 
+    // Flush + close the log before emitting a terminal status. Without this,
+    // readers tailing logPath after seeing terminal can miss the final lines
+    // because WriteStream.end is async.
+    const closeLog = (): Promise<void> =>
+      new Promise<void>((resolve) => {
+        if (logStream.writableEnded) resolve();
+        else logStream.end(resolve);
+      });
+
     const trackChild = (pid: number): void => {
       this.activePgid = pid;
       this.queue.update(job.id, { pgid: pid });
@@ -122,7 +131,7 @@ export class Worker extends EventEmitter {
     const worktreeKey = job.spec.cwd;
 
     try {
-      if (this.cancelledCheck(job.id, sink, logStream)) return;
+      if (await this.cancelledCheck(job.id, sink, closeLog)) return;
 
       await bootDevice({
         device: this.device,
@@ -130,7 +139,7 @@ export class Worker extends EventEmitter {
         logSink: sink,
       });
 
-      if (this.cancelledCheck(job.id, sink, logStream)) return;
+      if (await this.cancelledCheck(job.id, sink, closeLog)) return;
 
       if (job.spec.build === "skip") {
         sink("[build] skipped (spec.build = 'skip')");
@@ -160,7 +169,7 @@ export class Worker extends EventEmitter {
       }
 
       this.setStatus(job.id, "installing");
-      if (this.cancelledCheck(job.id, sink, logStream)) return;
+      if (await this.cancelledCheck(job.id, sink, closeLog)) return;
 
       if (variant === "debug" && job.spec.metro !== "skip") {
         this.setStatus(job.id, "metro-starting");
@@ -175,7 +184,7 @@ export class Worker extends EventEmitter {
       }
 
       this.setStatus(job.id, "running");
-      if (this.cancelledCheck(job.id, sink, logStream)) return;
+      if (await this.cancelledCheck(job.id, sink, closeLog)) return;
 
       const jobArtifactDir = join(artifactDir, job.id);
       mkdirSync(jobArtifactDir, { recursive: true });
@@ -198,9 +207,11 @@ export class Worker extends EventEmitter {
 
       if (this.cancelled.has(job.id)) {
         this.queue.update(job.id, { finishedAt: Date.now(), exitCode: result.exitCode });
+        await closeLog();
         this.setStatus(job.id, "cancelled", { exitCode: result.exitCode });
       } else if (result.exitCode === 0) {
         this.queue.update(job.id, { finishedAt: Date.now(), exitCode: 0 });
+        await closeLog();
         this.setStatus(job.id, "succeeded", { exitCode: 0 });
       } else {
         this.queue.update(job.id, {
@@ -208,6 +219,7 @@ export class Worker extends EventEmitter {
           exitCode: result.exitCode,
           failureReason: `maestro exit ${result.exitCode}`,
         });
+        await closeLog();
         this.setStatus(job.id, "failed", {
           exitCode: result.exitCode,
           failureReason: `maestro exit ${result.exitCode}`,
@@ -229,26 +241,27 @@ export class Worker extends EventEmitter {
         sink(`[teardown-error] ${teardownMessage}`);
       }
       this.queue.update(job.id, { finishedAt: Date.now(), failureReason: message });
+      await closeLog();
       this.setStatus(job.id, this.cancelled.has(job.id) ? "cancelled" : "failed", {
         failureReason: message,
       });
     } finally {
       this.cancelled.delete(job.id);
       this.abortController = undefined;
-      logStream.end();
+      if (!logStream.writableEnded) logStream.end();
     }
   }
 
-  private cancelledCheck(
+  private async cancelledCheck(
     jobId: string,
     sink: (l: string) => void,
-    logStream: WriteStream,
-  ): boolean {
+    closeLog: () => Promise<void>,
+  ): Promise<boolean> {
     if (!this.cancelled.has(jobId)) return false;
     sink("[cancel] requested before stage advanced");
     this.queue.update(jobId, { finishedAt: Date.now(), failureReason: "cancelled" });
+    await closeLog();
     this.setStatus(jobId, "cancelled");
-    logStream.end();
     return true;
   }
 

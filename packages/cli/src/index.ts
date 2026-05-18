@@ -1,29 +1,16 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { type JobSpec, JobSpecSchema, PID_PATH, type RpcEvent, SOCKET_PATH } from "@maestroq/core";
+import { PID_PATH, type RpcEvent, SOCKET_PATH } from "@maestroq/core";
 import { defineCommand, runMain } from "citty";
-import { parse as parseYaml } from "yaml";
-import { type ColorMode, resolveUseColor } from "./color.js";
+import { resolveUseColor } from "./color.js";
+import { colorMode } from "./color-mode.js";
 import { defaultConfigPath, initConfig } from "./init.js";
-import {
-  findProjectConfig,
-  mergeProjectConfigIntoSpec,
-  resolveSpecPath,
-} from "./project-config-loader.js";
+import { loadSpec } from "./load-spec.js";
+import { parseWatchInterval } from "./parse-interval.js";
 import { printDevices, printEvent, printJobs } from "./render.js";
 import { connect, DaemonNotRunningError } from "./rpc-client.js";
 import { DEFAULT_LIMIT, filterJobs, parseLimit, parseSince } from "./since.js";
-
-function colorMode(raw: string | boolean | undefined): ColorMode {
-  if (raw === undefined || raw === "" || raw === true) return "auto";
-  if (raw === false) return "never";
-  const s = String(raw).toLowerCase();
-  if (s === "always" || s === "yes" || s === "true" || s === "on") return "always";
-  if (s === "never" || s === "no" || s === "false" || s === "off") return "never";
-  return "auto";
-}
 
 async function callOnce(req: Parameters<Awaited<ReturnType<typeof connect>>["send"]>[0]): Promise<{
   payload?: unknown;
@@ -39,20 +26,6 @@ async function callOnce(req: Parameters<Awaited<ReturnType<typeof connect>>["sen
   } finally {
     client.close();
   }
-}
-
-function loadSpec(pathOrName: string): JobSpec {
-  const abs = resolveSpecPath(pathOrName);
-  const raw = readFileSync(abs, "utf8");
-  const parsed = (parseYaml(raw) ?? {}) as Record<string, unknown>;
-  const project = findProjectConfig(resolve(abs, ".."));
-  let rawSpec: Record<string, unknown>;
-  if (project) {
-    rawSpec = mergeProjectConfigIntoSpec(parsed, project) as Record<string, unknown>;
-  } else {
-    rawSpec = { cwd: process.cwd(), ...parsed };
-  }
-  return JobSpecSchema.parse(rawSpec);
 }
 
 const daemonStart = defineCommand({
@@ -241,13 +214,6 @@ const status = defineCommand({
     }
   },
 });
-
-function parseWatchInterval(raw: string | undefined): number {
-  if (!raw) return 2_000;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return 2_000;
-  return Math.max(500, Math.floor(n * 1000));
-}
 
 const logs = defineCommand({
   meta: { name: "logs", description: "Print logs for a job; -f to follow" },
