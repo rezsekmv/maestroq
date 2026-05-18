@@ -287,12 +287,23 @@ const cancel = defineCommand({
 
 const run = defineCommand({
   meta: { name: "run", description: "Submit a job, stream logs, exit with the job's code" },
-  args: { spec: { type: "positional", description: "Path to spec.yaml", required: true } },
+  args: {
+    spec: { type: "positional", description: "Path to spec.yaml", required: true },
+    "no-stream": {
+      type: "boolean",
+      description: "Submit and poll status to completion without streaming logs",
+    },
+  },
   async run({ args }) {
     const spec = loadSpec(args.spec);
     const submission = await guard(() => callOnce({ op: "submit", spec }));
     const { jobId } = parsePayload(SubmitResponseSchema, submission.payload, "submit");
     process.stderr.write(`[maestroq] submitted ${jobId}\n`);
+
+    if (args["no-stream"]) {
+      await runNoStream(jobId);
+      return;
+    }
 
     const client = await guardClient();
     let exitCode = 0;
@@ -321,6 +332,22 @@ const run = defineCommand({
     process.exit(exitCode);
   },
 });
+
+const TERMINAL: ReadonlySet<JobStatus> = new Set<JobStatus>(["succeeded", "failed", "cancelled"]);
+
+async function runNoStream(jobId: string): Promise<never> {
+  for (;;) {
+    const r = await guard(() => callOnce({ op: "status", jobId }));
+    const payload = r.payload as { jobs?: { status: JobStatus; exitCode?: number } } | undefined;
+    const job = payload?.jobs;
+    if (job && TERMINAL.has(job.status)) {
+      process.stderr.write(`[status] ${jobId}: ${job.status}\n`);
+      const code = job.status === "succeeded" ? (job.exitCode ?? 0) : (job.exitCode ?? 1);
+      process.exit(code);
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+  }
+}
 
 const init = defineCommand({
   meta: { name: "init", description: "Create ~/.maestroq/config.yaml" },
