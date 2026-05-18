@@ -84,3 +84,19 @@ This is exercised by verification step 6 in the original plan.
 Newline-delimited JSON over the Unix socket. Each request from `maestroq` is one line; the daemon answers with one or more `RpcEvent`s and a final `{"kind":"end"}` (or keeps streaming `log` events when `follow: true`).
 
 Schemas live in [`packages/core/src/rpc.ts`](../packages/core/src/rpc.ts) and are validated with zod on both ends. The protocol is not stable until v1.0.
+
+## Runner switch (`maestro` vs `maestro-runner`)
+
+`defaults.runner` in `~/.maestroq/config.yaml` selects which test engine the worker invokes. Three behaviors flip with it:
+
+- **Dispatcher iOS cap**: under `runner: maestro`, the dispatcher honors `defaults.max_concurrent_ios` (default `1`) because upstream `maestro test` hardcodes the iOS driver host port `7001` and the WDA port — two iOS sims on one Mac collide. Under `runner: maestro-runner`, the cap is treated as `Infinity`; the runner uses per-UDID dynamic WDA ports (8100–9099) and Appium-vendored WebDriverAgent, so parallel iOS works out of the box.
+- **Teardown pkill sweep**: `lifecycle/teardown.ts` only invokes the iOS leftover sweep (`cleanupIosLeftovers`) under `runner: maestro`. `maestro-runner` does not spawn `maestro-driver-iosUITests-Runner` or `xcodebuild test-without-building`, so there is nothing for the sweep to find.
+- **Finalize watchdog**: `lifecycle/maestro.ts` arms a 30 s SIGKILL-after-`Flows Passed/Failed` watchdog only under `runner: maestro`. This mitigates the upstream `DebugLogStore.finalizeRun` race that hangs the JVM forever on a deleted log dir. `maestro-runner` has no JVM and a different artifact layout, so the race does not exist.
+
+See AGENTS.md → "Runners" and "Known sharp edges" for the full upstream-bug context.
+
+## iOS leftover sweep (`cleanupIosLeftovers`)
+
+After a `maestro test` run on iOS under `runner: maestro`, the helper processes `maestro-driver-iosUITests-Runner` and `xcodebuild test-without-building` can linger past the parent CLI exit. They hold port `7001` stale, and the next iOS run dies during install with `Failed to connect to /127.0.0.1:7001`.
+
+`lifecycle/cleanup-ios.ts:cleanupIosLeftovers` runs on every iOS teardown (including the cancel path) and `pkill -f`s the two leftover patterns scoped to the just-used UDID. Cheap, idempotent, and load-bearing for back-to-back iOS jobs on the same simulator. `JobSpec.rebootSimBefore: true` is a heavier fallback (`simctl shutdown` + `bootstatus`, ~30 s) for projects where the pkill misses something.
