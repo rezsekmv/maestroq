@@ -33,6 +33,7 @@ export const ConfigSchema = z.object({
       cancel_grace_ms: z.number().int().positive().default(5_000),
       metro_ready_timeout_ms: z.number().int().positive().default(60_000),
       maestro_finalize_timeout_ms: z.number().int().positive().default(30_000),
+      queue_retention_days: z.number().int().min(0).default(14),
     })
     .default({
       runner: "maestro-runner",
@@ -42,6 +43,7 @@ export const ConfigSchema = z.object({
       cancel_grace_ms: 5_000,
       metro_ready_timeout_ms: 60_000,
       maestro_finalize_timeout_ms: 30_000,
+      queue_retention_days: 14,
     }),
   log_dir: z.string().default("~/.local/share/maestroq/logs"),
   artifact_dir: z.string().default("~/.local/share/maestroq/artifacts"),
