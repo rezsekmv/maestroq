@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { filterJobs, filterJobsBySince, parseLimit, parseSince } from "../src/since.js";
+import { filterJobs, parseLimit, parseSince } from "../src/since.js";
 
 describe("parseSince", () => {
   it("defaults to 1h when undefined or empty", () => {
@@ -30,32 +30,33 @@ describe("parseSince", () => {
   });
 });
 
-describe("filterJobsBySince", () => {
+describe("filterJobs (since-only)", () => {
   const now = Date.now();
 
   it("keeps jobs newer than the cutoff", () => {
-    const result = filterJobsBySince(
+    const result = filterJobs(
       {
         jobs: [
           { createdAt: now - 5_000, id: "fresh" },
           { createdAt: now - 7_200_000, id: "old" },
         ],
       },
-      3_600_000,
+      { sinceMs: 3_600_000, maxCount: null },
     ) as { jobs: Array<{ id: string }> };
     expect(result.jobs.map((j) => j.id)).toEqual(["fresh"]);
   });
 
   it("returns empty when single-job payload is too old", () => {
-    const result = filterJobsBySince({ jobs: { createdAt: now - 7_200_000 } }, 3_600_000) as {
-      jobs: unknown[];
-    };
+    const result = filterJobs(
+      { jobs: { createdAt: now - 7_200_000 } },
+      { sinceMs: 3_600_000, maxCount: null },
+    ) as { jobs: unknown[] };
     expect(result.jobs).toEqual([]);
   });
 
   it("keeps a single-job payload that is within the window", () => {
     const payload = { jobs: { createdAt: now - 5_000 } };
-    const result = filterJobsBySince(payload, 3_600_000);
+    const result = filterJobs(payload, { sinceMs: 3_600_000, maxCount: null });
     expect(result).toBe(payload);
   });
 });
