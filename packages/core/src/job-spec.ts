@@ -58,16 +58,17 @@ export const ActiveStatuses: ReadonlySet<JobStatus> = new Set([
   "tearing-down",
 ]);
 
-export interface JobRecord {
-  id: string;
-  spec: JobSpec;
-  status: JobStatus;
-  createdAt: number;
-  startedAt?: number;
-  finishedAt?: number;
-  deviceUdid?: string;
-  pgid?: number;
-  failureReason?: string;
-  exitCode?: number;
-  logPath?: string;
-}
+export const JobRecordSchema = z.object({
+  id: z.string(),
+  spec: JobSpecSchema,
+  status: JobStatusSchema,
+  createdAt: z.number(),
+  startedAt: z.number().optional(),
+  finishedAt: z.number().optional(),
+  deviceUdid: z.string().optional(),
+  pgid: z.number().optional(),
+  failureReason: z.string().optional(),
+  exitCode: z.number().optional(),
+  logPath: z.string().optional(),
+});
+export type JobRecord = z.infer<typeof JobRecordSchema>;

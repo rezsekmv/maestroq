@@ -1,8 +1,16 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { PID_PATH, type RpcEvent, SOCKET_PATH } from "@maestroq/core";
+import {
+  CancelResponseSchema,
+  DevicesResponseSchema,
+  PID_PATH,
+  SOCKET_PATH,
+  StatusResponseSchema,
+  SubmitResponseSchema,
+} from "@maestroq/core";
 import { defineCommand, runMain } from "citty";
+import type { ZodTypeAny, z } from "zod";
 import { resolveUseColor } from "./color.js";
 import { colorMode } from "./color-mode.js";
 import { defaultConfigPath, initConfig } from "./init.js";
@@ -26,6 +34,17 @@ async function callOnce(req: Parameters<Awaited<ReturnType<typeof connect>>["sen
   } finally {
     client.close();
   }
+}
+
+function parsePayload<S extends ZodTypeAny>(schema: S, payload: unknown, op: string): z.infer<S> {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    process.stderr.write(
+      `[maestroq] daemon ${op} response failed validation: ${parsed.error.message}\n`,
+    );
+    process.exit(1);
+  }
+  return parsed.data;
 }
 
 const daemonStart = defineCommand({
@@ -105,12 +124,13 @@ const devices = defineCommand({
   },
   async run({ args }) {
     const r = await guard(() => callOnce({ op: "devices" }));
+    const payload = parsePayload(DevicesResponseSchema, r.payload, "devices");
     if (args.json) {
-      process.stdout.write(`${JSON.stringify(r.payload, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
       return;
     }
     const useColor = resolveUseColor(colorMode(args.color));
-    printDevices(r.payload, { color: useColor });
+    printDevices(payload, { color: useColor });
   },
 });
 
@@ -120,7 +140,7 @@ const submit = defineCommand({
   async run({ args }) {
     const spec = loadSpec(args.spec);
     const r = await guard(() => callOnce({ op: "submit", spec }));
-    const jobId = (r.payload as { jobId: string }).jobId;
+    const { jobId } = parsePayload(SubmitResponseSchema, r.payload, "submit");
     process.stdout.write(`${jobId}\n`);
   },
 });
@@ -169,15 +189,16 @@ const status = defineCommand({
 
     const useColor = resolveUseColor(colorMode(args.color));
 
-    const fetchOnce = async (): Promise<{ payload?: unknown; error?: string }> => {
+    const fetchOnce = async (): Promise<z.infer<typeof StatusResponseSchema>> => {
       const r = await guard(() =>
         callOnce({ op: "status", ...(args.jobId ? { jobId: args.jobId } : {}) }),
       );
-      if (filterOpts.sinceMs == null && filterOpts.maxCount == null) return r;
-      return { ...r, payload: filterJobs(r.payload, filterOpts) };
+      const payload = parsePayload(StatusResponseSchema, r.payload, "status");
+      if (filterOpts.sinceMs == null && filterOpts.maxCount == null) return payload;
+      return filterJobs(payload, filterOpts) as z.infer<typeof StatusResponseSchema>;
     };
 
-    const renderOnce = (payload: unknown): void => {
+    const renderOnce = (payload: z.infer<typeof StatusResponseSchema>): void => {
       if (args.json) {
         process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
         return;
@@ -190,8 +211,8 @@ const status = defineCommand({
     };
 
     if (!args.watch) {
-      const r = await fetchOnce();
-      renderOnce(r.payload);
+      const payload = await fetchOnce();
+      renderOnce(payload);
       return;
     }
 
@@ -202,14 +223,14 @@ const status = defineCommand({
       process.exit(0);
     });
     for (;;) {
-      const r = await fetchOnce();
+      const payload = await fetchOnce();
       if (useAnsi) process.stdout.write("\x1b[2J\x1b[H");
       if (useAnsi) {
         process.stdout.write(
           `maestroq — ${new Date().toLocaleTimeString()} (refresh ${intervalMs / 1000}s, Ctrl-C to exit)\n\n`,
         );
       }
-      renderOnce(r.payload);
+      renderOnce(payload);
       await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
     }
   },
@@ -243,7 +264,8 @@ const cancel = defineCommand({
   args: { jobId: { type: "positional", required: true, description: "Job id" } },
   async run({ args }) {
     const r = await guard(() => callOnce({ op: "cancel", jobId: args.jobId }));
-    process.stdout.write(`cancelled: ${(r.payload as { cancelled: string }).cancelled}\n`);
+    const { cancelled } = parsePayload(CancelResponseSchema, r.payload, "cancel");
+    process.stdout.write(`cancelled: ${cancelled}\n`);
   },
 });
 
@@ -253,7 +275,7 @@ const run = defineCommand({
   async run({ args }) {
     const spec = loadSpec(args.spec);
     const submission = await guard(() => callOnce({ op: "submit", spec }));
-    const jobId = (submission.payload as { jobId: string }).jobId;
+    const { jobId } = parsePayload(SubmitResponseSchema, submission.payload, "submit");
     process.stderr.write(`[maestroq] submitted ${jobId}\n`);
 
     const client = await guardClient();
@@ -365,9 +387,5 @@ async function guardClient(): Promise<Awaited<ReturnType<typeof connect>>> {
     throw err;
   }
 }
-
-// Silence unused-import warning during typecheck for the RpcEvent type
-const _unused: RpcEvent | undefined = undefined;
-void _unused;
 
 runMain(main);
