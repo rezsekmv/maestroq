@@ -1,9 +1,8 @@
-import type { JobRecord, RpcEvent } from "@maestroq/core";
-import { colorExit, colorStatus, paint } from "./color.js";
+import type { DevicesResponse, JobRecord, RpcEvent, StatusResponse } from "@maestroq/core";
+import { colorExit, colorStatus, type PaintColor, paint } from "./color.js";
 
-export function printDevices(payload: unknown, opts: { color?: boolean } = {}): void {
-  const devices = (payload as { devices: Array<{ udid: string; platform: string; busy: boolean }> })
-    .devices;
+export function printDevices(payload: DevicesResponse, opts: { color?: boolean } = {}): void {
+  const { devices } = payload;
   if (!devices.length) {
     process.stdout.write("(no devices configured — edit ~/.maestroq/config.yaml)\n");
     return;
@@ -25,7 +24,7 @@ interface Column {
   name: string;
   width: number;
   value: (j: JobRecord, now: number) => string;
-  paint?: (j: JobRecord) => string | null;
+  paint?: (j: JobRecord) => PaintColor | null;
 }
 
 const WORKTREE_WIDTH = 18;
@@ -97,8 +96,8 @@ function truncate(s: string, max: number): string {
   return `${s.slice(0, max - 1)}…`;
 }
 
-export function printJobs(payload: unknown, opts: PrintJobsOptions = {}): void {
-  const jobs = (payload as { jobs: JobRecord | JobRecord[] | undefined }).jobs;
+export function printJobs(payload: StatusResponse, opts: PrintJobsOptions = {}): void {
+  const { jobs } = payload;
   const list = Array.isArray(jobs) ? jobs : jobs ? [jobs] : [];
   if (!list.length) {
     process.stdout.write("(no jobs)\n");
@@ -118,7 +117,7 @@ export function printJobs(payload: unknown, opts: PrintJobsOptions = {}): void {
         const padded = c.width ? v.padEnd(c.width) : v;
         if (!opts.color || !c.paint) return padded;
         const tone = c.paint(j);
-        return tone ? paint(padded, tone as Parameters<typeof paint>[1]) : padded;
+        return tone ? paint(padded, tone) : padded;
       })
       .join(" ");
     process.stdout.write(`${row}\n`);
