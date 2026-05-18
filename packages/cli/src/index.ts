@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import {
   CancelResponseSchema,
   DevicesResponseSchema,
@@ -387,7 +388,19 @@ const configEdit = defineCommand({
   meta: { name: "edit", description: "Open ~/.maestroq/config.yaml in $EDITOR" },
   async run() {
     const editor = process.env.EDITOR ?? "vi";
-    const child = spawn(editor, [defaultConfigPath()], { stdio: "inherit" });
+    const path = defaultConfigPath();
+    if (!existsSync(path)) {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(
+        path,
+        "# maestroq config — edit to add devices.\n" +
+          "devices: []\n" +
+          "defaults:\n" +
+          "  runner: maestro-runner\n" +
+          "  # max_concurrent_ios: 1\n",
+      );
+    }
+    const child = spawn(editor, [path], { stdio: "inherit" });
     await new Promise<void>((resolve, reject) => {
       child.on("exit", (code) =>
         code === 0 ? resolve() : reject(new Error(`editor exit ${code}`)),
