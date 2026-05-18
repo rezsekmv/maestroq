@@ -23,7 +23,7 @@ export class Worker extends EventEmitter {
   private cancelled = new Set<string>();
   private activePgid?: number;
   private abortController?: AbortController;
-  private readonly cancelGraceMs = 5_000;
+  private readonly cancelGraceMs: number;
 
   constructor(
     private readonly device: DeviceConfig,
@@ -32,6 +32,7 @@ export class Worker extends EventEmitter {
     private readonly config: Config,
   ) {
     super();
+    this.cancelGraceMs = config.defaults.cancel_grace_ms;
   }
 
   get udid(): string {
@@ -180,6 +181,7 @@ export class Worker extends EventEmitter {
           reuse: job.spec.metro.reuse,
           logSink: sink,
           signal: this.abortController?.signal,
+          readyTimeoutMs: this.config.defaults.metro_ready_timeout_ms,
         });
       }
 
@@ -195,6 +197,7 @@ export class Worker extends EventEmitter {
         artifactDir: jobArtifactDir,
         logSink: sink,
         onChildStart: trackChild,
+        finalizeTimeoutMs: this.config.defaults.maestro_finalize_timeout_ms,
       });
 
       this.setStatus(job.id, "tearing-down");
