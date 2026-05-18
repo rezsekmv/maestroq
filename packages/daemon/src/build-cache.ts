@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import type { JobSpec, Variant } from "@maestroq/core";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { BUILD_CACHE_PATH, type JobSpec, type Variant } from "@maestroq/core";
 import { execa } from "execa";
 import { logger } from "./logger.js";
 
@@ -18,6 +20,34 @@ export interface CacheDecision {
 }
 
 const lastBuilds = new Map<string, CacheKey>();
+let cachePath: string = BUILD_CACHE_PATH;
+
+export function loadPersistedCache(path: string = BUILD_CACHE_PATH): void {
+  cachePath = path;
+  try {
+    const raw = readFileSync(path, "utf8");
+    const entries = JSON.parse(raw) as Array<[string, CacheKey]>;
+    lastBuilds.clear();
+    for (const [k, v] of entries) lastBuilds.set(k, v);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") {
+      logger.warn({ err, path }, "build-cache: failed to load, starting empty");
+    }
+    lastBuilds.clear();
+  }
+}
+
+function persistCache(): void {
+  try {
+    mkdirSync(dirname(cachePath), { recursive: true });
+    const tmp = `${cachePath}.tmp`;
+    writeFileSync(tmp, JSON.stringify(Array.from(lastBuilds.entries())));
+    renameSync(tmp, cachePath);
+  } catch (err) {
+    logger.warn({ err, path: cachePath }, "build-cache: persist failed");
+  }
+}
 
 export async function gitHead(cwd: string): Promise<string> {
   const { stdout } = await execa("git", ["rev-parse", "HEAD"], { cwd });
@@ -68,8 +98,10 @@ export async function decideCache(
 
 export function recordSuccessfulBuild(key: CacheKey, deviceKey: string): void {
   lastBuilds.set(`${keyId(key)}::${deviceKey}`, key);
+  persistCache();
 }
 
-export function _resetCacheForTests(): void {
+export function _resetCacheForTests(path?: string): void {
   lastBuilds.clear();
+  cachePath = path ?? BUILD_CACHE_PATH;
 }
