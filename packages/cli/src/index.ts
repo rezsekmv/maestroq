@@ -282,6 +282,10 @@ const cancel = defineCommand({
   args: { jobId: { type: "positional", required: true, description: "Job id" } },
   async run({ args }) {
     const r = await guard(() => callOnce({ op: "cancel", jobId: args.jobId }));
+    if (r.error) {
+      process.stderr.write(`${r.error}\n`);
+      process.exit(1);
+    }
     const { cancelled } = parsePayload(CancelResponseSchema, r.payload, "cancel");
     process.stdout.write(`cancelled: ${cancelled}\n`);
   },
