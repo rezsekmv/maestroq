@@ -19,25 +19,25 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-function readEvents(events: string): RpcEvent[] {
-  const out: RpcEvent[] = [];
-  for (const line of events.split("\n")) {
-    if (!line.trim()) continue;
-    out.push(JSON.parse(line) as RpcEvent);
-  }
-  return out;
-}
-
 async function collectResponse(socketPath: string, payload: string): Promise<RpcEvent[]> {
   return await new Promise((resolve, reject) => {
     const socket = createConnection(socketPath);
+    const events: RpcEvent[] = [];
     let buf = "";
     socket.on("data", (chunk) => {
       buf += chunk.toString("utf8");
-      const events = readEvents(buf);
-      if (events.some((e) => e.kind === "end")) {
-        socket.end();
-        resolve(events);
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) !== -1) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        if (!line.trim()) continue;
+        const ev = JSON.parse(line) as RpcEvent;
+        events.push(ev);
+        if (ev.kind === "end") {
+          socket.end();
+          resolve(events);
+          return;
+        }
       }
     });
     socket.on("error", reject);
