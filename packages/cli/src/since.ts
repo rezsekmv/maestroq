@@ -15,6 +15,16 @@ export function parseSince(raw: string | undefined): number {
   return Math.max(0, value * factor);
 }
 
+export function parseDuration(raw: string): number | undefined {
+  const m = /^(\d+(?:\.\d+)?)\s*(s|m|h|d)?$/.exec(raw.trim());
+  if (!m) return undefined;
+  const value = Number(m[1]);
+  const unit = m[2] ?? "s";
+  const factor =
+    unit === "s" ? 1_000 : unit === "m" ? 60_000 : unit === "h" ? 3_600_000 : 86_400_000;
+  return Math.max(0, Math.floor(value * factor));
+}
+
 export function parseLimit(raw: string | undefined): number {
   if (!raw) return DEFAULT_LIMIT;
   const n = Number(raw);

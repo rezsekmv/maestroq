@@ -18,7 +18,7 @@ import { loadSpec } from "./load-spec.js";
 import { parseWatchInterval } from "./parse-interval.js";
 import { printDevices, printEvent, printJobs } from "./render.js";
 import { connect, DaemonNotRunningError } from "./rpc-client.js";
-import { DEFAULT_LIMIT, filterJobs, parseLimit, parseSince } from "./since.js";
+import { DEFAULT_LIMIT, filterJobs, parseDuration, parseLimit, parseSince } from "./since.js";
 import { VERSION } from "./version.js";
 
 async function callOnce(req: Parameters<Awaited<ReturnType<typeof connect>>["send"]>[0]): Promise<{
@@ -355,6 +355,61 @@ const configEdit = defineCommand({
   },
 });
 
+const prune = defineCommand({
+  meta: { name: "prune", description: "Remove old terminal jobs (and optionally logs/artifacts)" },
+  args: {
+    "older-than": {
+      type: "string",
+      description: "Duration (e.g. 7d, 2h, 30m, 0s). Required.",
+      required: true,
+    },
+    statuses: {
+      type: "string",
+      description: "Comma-separated statuses (default: succeeded,failed,cancelled)",
+    },
+    "keep-logs": { type: "boolean", description: "Do not delete log files" },
+    "keep-artifacts": { type: "boolean", description: "Do not delete artifact directories" },
+  },
+  async run({ args }) {
+    const olderThanMs = parseDuration(String(args["older-than"]));
+    if (olderThanMs === undefined) {
+      process.stderr.write(`[maestroq] invalid --older-than "${args["older-than"]}"\n`);
+      process.exit(1);
+    }
+    let statuses: JobStatus[] | undefined;
+    if (args.statuses) {
+      const allowed: ReadonlySet<JobStatus> = new Set<JobStatus>([
+        "succeeded",
+        "failed",
+        "cancelled",
+      ]);
+      const parts = String(args.statuses)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const out: JobStatus[] = [];
+      for (const p of parts) {
+        if (!allowed.has(p as JobStatus)) {
+          process.stderr.write(`[maestroq] invalid status "${p}"\n`);
+          process.exit(1);
+        }
+        out.push(p as JobStatus);
+      }
+      statuses = out;
+    }
+    const req = {
+      op: "prune" as const,
+      olderThanMs,
+      ...(statuses ? { statuses } : {}),
+      deleteLogs: !args["keep-logs"],
+      deleteArtifacts: !args["keep-artifacts"],
+    };
+    const r = await guard(() => callOnce(req));
+    const removed = (r.payload as { removed: number } | undefined)?.removed ?? 0;
+    process.stdout.write(`Pruned ${removed} job${removed === 1 ? "" : "s"}.\n`);
+  },
+});
+
 const config = defineCommand({
   meta: { name: "config", description: "Config helpers" },
   subCommands: { edit: configEdit },
@@ -362,7 +417,7 @@ const config = defineCommand({
 
 const main = defineCommand({
   meta: { name: "maestroq", description: "maestroq CLI client", version: VERSION },
-  subCommands: { daemon, devices, submit, status, logs, cancel, run, init, config },
+  subCommands: { daemon, devices, submit, status, logs, cancel, run, prune, init, config },
 });
 
 async function guard<T>(fn: () => Promise<T>): Promise<T> {
