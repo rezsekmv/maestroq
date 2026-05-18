@@ -7,6 +7,7 @@ import { Worker, type WorkerEvent } from "./worker.js";
 
 export class Dispatcher extends EventEmitter {
   private readonly workers: Worker[];
+  private readonly deviceByUdid: Map<string, DeviceConfig>;
 
   constructor(
     private readonly queue: JobQueue,
@@ -15,6 +16,7 @@ export class Dispatcher extends EventEmitter {
     devices: DeviceConfig[],
   ) {
     super();
+    this.deviceByUdid = new Map(devices.map((d) => [d.udid, d]));
     this.workers = devices.map((d) => {
       const w = new Worker(d, queue, metroPool, config);
       w.on("event", (ev: WorkerEvent) => {
@@ -70,10 +72,14 @@ export class Dispatcher extends EventEmitter {
   }
 
   describeWorkers(): WorkerInfo[] {
-    return this.workers.map((w) => ({
-      udid: w.udid,
-      platform: w.platform,
-      busy: w.isBusy(),
-    }));
+    return this.workers.map((w) => {
+      const label = this.deviceByUdid.get(w.udid)?.label;
+      return {
+        udid: w.udid,
+        platform: w.platform,
+        busy: w.isBusy(),
+        ...(label ? { label } : {}),
+      };
+    });
   }
 }

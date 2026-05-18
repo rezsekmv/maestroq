@@ -10,7 +10,8 @@ export function printDevices(payload: DevicesResponse, opts: { color?: boolean }
   for (const d of devices) {
     const state = d.busy ? "busy" : "idle";
     const painted = opts.color ? paint(state, d.busy ? "yellow" : "green") : state;
-    process.stdout.write(`${d.platform.padEnd(8)} ${d.udid.padEnd(40)} ${painted}\n`);
+    const labelPart = d.label ? `  ${d.label}` : "";
+    process.stdout.write(`${d.platform.padEnd(8)} ${d.udid.padEnd(40)} ${painted}${labelPart}\n`);
   }
 }
 
