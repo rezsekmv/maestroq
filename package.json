@@ -25,6 +25,7 @@
     "@changesets/cli": "^2.31.0",
     "@types/node": "^24.0.0",
     "@types/proper-lockfile": "^4.1.4",
+    "@vitest/coverage-v8": "^2.1.9",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
   }
