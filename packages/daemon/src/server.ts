@@ -19,6 +19,7 @@ export interface DaemonServerOptions {
   dispatcher: Dispatcher;
   socketPath?: string;
   pidPath?: string;
+  onShutdown?: () => Promise<void> | void;
 }
 
 interface Client {
@@ -57,6 +58,7 @@ export function startDaemonServer(opts: DaemonServerOptions): Server {
         handleLine(client, line, opts).catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
           send(socket, { kind: "error", message });
+          send(socket, { kind: "end" });
         });
       }
     });
@@ -70,6 +72,11 @@ export function startDaemonServer(opts: DaemonServerOptions): Server {
     }
     writeFileSync(pidPath, String(process.pid));
     logger.info({ socketPath, pid: process.pid }, "daemon listening");
+  });
+
+  server.on("error", (err) => {
+    logger.error({ err }, "socket listen error");
+    process.exit(1);
   });
 
   opts.dispatcher.on("event", (ev: RpcEvent) => {
@@ -88,7 +95,7 @@ export function startDaemonServer(opts: DaemonServerOptions): Server {
     }
   });
 
-  const shutdown = (signal: NodeJS.Signals): void => {
+  const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     logger.info({ signal }, "daemon shutting down");
     server.close();
     try {
@@ -101,10 +108,21 @@ export function startDaemonServer(opts: DaemonServerOptions): Server {
     } catch {
       // ignore
     }
+    if (opts.onShutdown) {
+      try {
+        await opts.onShutdown();
+      } catch (err) {
+        logger.warn({ err }, "onShutdown handler failed");
+      }
+    }
     process.exit(0);
   };
-  process.once("SIGINT", shutdown);
-  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", (sig) => {
+    void shutdown(sig);
+  });
+  process.once("SIGTERM", (sig) => {
+    void shutdown(sig);
+  });
 
   return server;
 }
@@ -120,11 +138,13 @@ async function handleLine(client: Client, line: string, opts: DaemonServerOption
     parsed = JSON.parse(line);
   } catch {
     send(client.socket, { kind: "error", message: "invalid JSON" });
+    send(client.socket, { kind: "end" });
     return;
   }
   const req = RpcRequestSchema.safeParse(parsed);
   if (!req.success) {
     send(client.socket, { kind: "error", message: `invalid request: ${req.error.message}` });
+    send(client.socket, { kind: "end" });
     return;
   }
   await dispatchRequest(client, req.data, opts);

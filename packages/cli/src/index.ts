@@ -75,7 +75,15 @@ const daemonStop = defineCommand({
         process.stderr.write(`${r.error}\n`);
         process.exit(1);
       }
-      process.stdout.write("daemon stop signalled\n");
+      for (let i = 0; i < 50; i++) {
+        if (!existsSync(SOCKET_PATH)) break;
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      }
+      if (existsSync(SOCKET_PATH)) {
+        process.stderr.write("daemon stop signalled but socket still present after 5s\n");
+      } else {
+        process.stdout.write("daemon stopped\n");
+      }
     } catch (err) {
       if (err instanceof DaemonNotRunningError) {
         process.stderr.write(`${err.message}\n`);

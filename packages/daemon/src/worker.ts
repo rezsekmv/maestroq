@@ -22,6 +22,7 @@ export class Worker extends EventEmitter {
   private busy = false;
   private cancelled = new Set<string>();
   private activePgid?: number;
+  private abortController?: AbortController;
   private readonly cancelGraceMs = 5_000;
 
   constructor(
@@ -46,7 +47,9 @@ export class Worker extends EventEmitter {
   }
 
   cancel(jobId: string): boolean {
+    if (this.queue.isTerminal(jobId)) return false;
     this.cancelled.add(jobId);
+    this.abortController?.abort();
     const pgid = this.activePgid;
     if (!pgid || typeof pgid !== "number") return false;
     try {
@@ -89,6 +92,7 @@ export class Worker extends EventEmitter {
   }
 
   private async run(job: JobRecord): Promise<void> {
+    this.abortController = new AbortController();
     const logDir = expandHome(this.config.log_dir);
     const artifactDir = expandHome(this.config.artifact_dir);
     mkdirSync(logDir, { recursive: true });
@@ -166,6 +170,7 @@ export class Worker extends EventEmitter {
           worktreeKey,
           reuse: job.spec.metro.reuse,
           logSink: sink,
+          signal: this.abortController?.signal,
         });
       }
 
@@ -229,6 +234,7 @@ export class Worker extends EventEmitter {
       });
     } finally {
       this.cancelled.delete(job.id);
+      this.abortController = undefined;
       logStream.end();
     }
   }

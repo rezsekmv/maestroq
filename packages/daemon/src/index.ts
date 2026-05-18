@@ -1,12 +1,14 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync } from "node:fs";
 import {
   CONFIG_PATH,
   type Config,
   ConfigSchema,
+  LOCK_PATH,
   loadConfig,
   MAESTROQ_HOME,
   QUEUE_PATH,
 } from "@maestroq/core";
+import { lock } from "proper-lockfile";
 import { Dispatcher } from "./dispatcher.js";
 import { logger } from "./logger.js";
 import { MetroPortPool } from "./metro-pool.js";
@@ -20,6 +22,23 @@ export interface StartDaemonOptions {
 
 export async function startDaemon(opts: StartDaemonOptions = {}): Promise<void> {
   mkdirSync(MAESTROQ_HOME, { recursive: true });
+
+  if (!existsSync(LOCK_PATH)) {
+    closeSync(openSync(LOCK_PATH, "w"));
+  }
+
+  let release: () => Promise<void>;
+  try {
+    release = await lock(LOCK_PATH, { stale: 10_000, realpath: false });
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ELOCKED") {
+      process.stderr.write("daemon already running\n");
+      process.exit(2);
+    }
+    throw err;
+  }
+
   const configPath = opts.configPath ?? CONFIG_PATH;
   const config: Config = existsSync(configPath) ? loadConfig(configPath) : ConfigSchema.parse({});
 
@@ -37,7 +56,7 @@ export async function startDaemon(opts: StartDaemonOptions = {}): Promise<void> 
   const metroPool = new MetroPortPool(config.metro.port_range);
   const dispatcher = new Dispatcher(queue, metroPool, config, config.devices);
 
-  startDaemonServer({ queue, dispatcher });
+  startDaemonServer({ queue, dispatcher, onShutdown: release });
   dispatcher.start();
 }
 

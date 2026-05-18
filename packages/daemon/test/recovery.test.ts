@@ -81,4 +81,15 @@ describe("sweepStaleProcessGroups", () => {
     expect(() => sweepStaleProcessGroups(q)).not.toThrow();
     expect(q.get(job.id)?.status).toBe("failed");
   });
+
+  it("does not signal a pgid that matches the current process pid", () => {
+    const q = new JobQueue(queuePath);
+    q.load();
+    const job = q.add(spec());
+    q.update(job.id, { status: "running", pgid: process.pid });
+
+    const result = sweepStaleProcessGroups(q);
+    expect(result.killed).not.toContain(process.pid);
+    expect(q.get(job.id)?.status).toBe("failed");
+  });
 });

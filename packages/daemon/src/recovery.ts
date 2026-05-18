@@ -11,7 +11,7 @@ export function sweepStaleProcessGroups(queue: JobQueue): RecoveryResult {
   const killed: number[] = [];
 
   for (const job of active) {
-    if (typeof job.pgid === "number" && job.pgid > 1) {
+    if (typeof job.pgid === "number" && job.pgid > 1 && job.pgid !== process.pid) {
       try {
         process.kill(-job.pgid, "SIGKILL");
         killed.push(job.pgid);

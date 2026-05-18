@@ -51,9 +51,12 @@ function buildClient(socket: Socket): RpcClient {
   };
 }
 
-async function* readEvents(socket: Socket): AsyncIterable<RpcEvent> {
+const MAX_LINE = 8 * 1024 * 1024;
+
+export async function* readEvents(socket: Socket): AsyncIterable<RpcEvent> {
   let buffer = "";
   let socketClosed = false;
+  let overflowError: Error | undefined;
   const queue: RpcEvent[] = [];
   let resolveWait: (() => void) | undefined;
 
@@ -65,8 +68,18 @@ async function* readEvents(socket: Socket): AsyncIterable<RpcEvent> {
     }
   };
 
-  socket.on("data", (chunk) => {
+  const onData = (chunk: Buffer): void => {
     buffer += chunk.toString("utf8");
+    if (buffer.length > MAX_LINE && buffer.indexOf("\n") === -1) {
+      overflowError = new Error(`rpc-client: line exceeded ${MAX_LINE} bytes without newline`);
+      try {
+        socket.destroy();
+      } catch {
+        // ignore
+      }
+      wakeup();
+      return;
+    }
     let nl: number;
     while ((nl = buffer.indexOf("\n")) !== -1) {
       const line = buffer.slice(0, nl);
@@ -79,22 +92,30 @@ async function* readEvents(socket: Socket): AsyncIterable<RpcEvent> {
       }
     }
     wakeup();
-  });
-  socket.on("close", () => {
+  };
+  const onClose = (): void => {
     socketClosed = true;
     wakeup();
-  });
+  };
+  socket.on("data", onData);
+  socket.on("close", onClose);
 
-  while (true) {
-    if (queue.length === 0) {
-      if (socketClosed) return;
-      await new Promise<void>((r) => {
-        resolveWait = r;
-      });
-      continue;
+  try {
+    while (true) {
+      if (overflowError) throw overflowError;
+      if (queue.length === 0) {
+        if (socketClosed) return;
+        await new Promise<void>((r) => {
+          resolveWait = r;
+        });
+        continue;
+      }
+      const ev = queue.shift()!;
+      yield ev;
+      if (ev.kind === "end") return;
     }
-    const ev = queue.shift()!;
-    yield ev;
-    if (ev.kind === "end") return;
+  } finally {
+    socket.off("data", onData);
+    socket.off("close", onClose);
   }
 }
