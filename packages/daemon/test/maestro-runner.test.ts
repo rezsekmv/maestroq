@@ -34,7 +34,7 @@ const spec = JobSpecSchema.parse({
 });
 
 describe("runMaestro under runner=maestro-runner", () => {
-  it("invokes maestro-runner with --device --platform --output and flows", async () => {
+  it("places --platform/--device/--output before the `test` subcommand", async () => {
     installFakeRunner(`
 echo "2/2 Flows Passed in 1s"
 exit 0
@@ -52,15 +52,17 @@ exit 0
     expect(result.exitCode).toBe(0);
     expect(result.killedAfterFinalize).toBe(false);
 
+    // maestro-runner >=1.1.x: these are global options. Putting them after
+    // `test` makes the binary exit with "flag provided but not defined: -device".
     const recorded = readFileSync(argsFile, "utf8").trim().split("\n");
     expect(recorded).toEqual([
-      "test",
-      "--device",
-      "ABC-123",
       "--platform",
       "ios",
+      "--device",
+      "ABC-123",
       "--output",
       join(dir, "artifacts"),
+      "test",
       "a.yaml",
       "b.yaml",
     ]);

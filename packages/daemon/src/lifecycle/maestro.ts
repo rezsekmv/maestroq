@@ -27,14 +27,18 @@ export async function runMaestro(opts: MaestroOptions): Promise<MaestroResult> {
     runner === "maestro-runner"
       ? {
           bin: "maestro-runner",
+          // --platform / --device / --output are global options in
+          // maestro-runner (>=1.1.x) and must appear BEFORE the `test`
+          // subcommand. Placing them after `test` makes the binary exit
+          // with "flag provided but not defined: -device".
           args: [
-            "test",
-            "--device",
-            device.udid,
             "--platform",
             device.platform,
+            "--device",
+            device.udid,
             "--output",
             artifactDir,
+            "test",
             ...spec.flows,
           ],
         }
