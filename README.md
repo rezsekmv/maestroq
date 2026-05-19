@@ -109,6 +109,25 @@ defaults:
 
 Spec fields always win — this only fills gaps.
 
+#### Physical iOS devices (capability gap)
+
+Maestroq is built around iOS **simulators**. A physical iPhone/iPad does run, but only after working around four Apple-side constraints in order — none of them are bugs maestroq can fix on its own:
+
+1. **Use the device's ECID, not its CoreDevice UUID, in `~/.maestroq/config.yaml`.** `xcrun devicectl list devices` shows `identifier: FC709E4A-…` (CoreDevice UUID) but `xcodebuild` matches against the ECID `00008030-…`. Get both via `xcrun devicectl list devices -v` — the `udid` field is the ECID.
+2. **Export `MAESTRO_TEAM_ID=<your-Apple-team-id>` before `maestroq daemon start`.** maestro-runner needs it to code-sign WebDriverAgent for real devices. (Or set it via the spec's `env:` block per-job.)
+3. **Override the WDA bundle id with `MAESTRO_WDA_BUNDLE_ID=<your-prefix>.WebDriverAgentRunner`.** The default is `com.facebook.WebDriverAgentRunner.xctrunner`, which Facebook's team owns — no other team can sign under it. maestro-runner appends `.xctrunner` automatically, so don't include it.
+4. **Bootstrap signing once via Xcode UI.** Even with a logged-in Apple ID, `xcodebuild` from CLI cannot auto-provision profiles for personal/individual accounts. Open `~/.maestro-runner/drivers/ios/WebDriverAgent/WebDriverAgent.xcodeproj` in Xcode, select the `WebDriverAgentRunner` target → Signing & Capabilities, tick "Automatically manage signing", pick your team, change the bundle id to match step 3, and let Xcode UI fix any signing issues. Once it builds in the UI, the provisioning profile is cached at `~/Library/Developer/Xcode/UserData/Provisioning Profiles/` and subsequent maestro-runner CLI builds reuse it.
+
+The most common symptom-to-step mapping if something fails along the way:
+
+| Failure | Step to revisit |
+| --- | --- |
+| `[boot] simctl bootstatus … Invalid device` | (maestroq itself didn't always handle physical devices — make sure you're on a version with `lifecycle/boot.ts` routing through `devicectl`) |
+| `xcodebuild: Unable to find a device matching the provided destination specifier` | step 1 (wrong UDID kind) |
+| `iOS with WDA driver requires --team-id` | step 2 |
+| `No profiles for 'com.facebook.WebDriverAgentRunner.xctrunner'` | step 3 |
+| `No Accounts: Add a new account in Accounts settings` despite being signed in to Xcode | step 4 |
+
 ## Docs
 
 - [Architecture & lifecycle](docs/architecture.md)
