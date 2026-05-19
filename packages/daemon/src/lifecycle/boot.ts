@@ -10,10 +10,73 @@ export interface BootOptions {
 
 export const DEFAULT_BOOTSTATUS_TIMEOUT_MS = 60_000;
 
+// Probe whether an iOS UDID points at a simulator. `xcrun simctl list -j devices`
+// emits a JSON map of runtime → device[]; physical devices are absent.
+// We cache the result for the lifetime of the daemon — a UDID's "is-simulator-ness"
+// doesn't change at runtime.
+const iosSimCache = new Map<string, boolean>();
+
+async function isIosSimulator(udid: string): Promise<boolean> {
+  const cached = iosSimCache.get(udid);
+  if (cached !== undefined) return cached;
+  let isSim = false;
+  try {
+    const r = await execa("xcrun", ["simctl", "list", "-j", "devices"], { reject: false });
+    if (r.exitCode === 0) {
+      const data = JSON.parse(r.stdout) as { devices: Record<string, { udid: string }[]> };
+      for (const runtime of Object.values(data.devices ?? {})) {
+        if (runtime.some((d) => d.udid === udid)) {
+          isSim = true;
+          break;
+        }
+      }
+    }
+  } catch {
+    // simctl unavailable or unparseable — treat as non-simulator so we don't
+    // hammer a physical iPhone with `simctl bootstatus`.
+    isSim = false;
+  }
+  iosSimCache.set(udid, isSim);
+  return isSim;
+}
+
+export function _resetIosSimCacheForTests(): void {
+  iosSimCache.clear();
+}
+
 export async function bootDevice(opts: BootOptions): Promise<void> {
   const { device, rebootSimBefore, logSink } = opts;
   const bootstatusTimeoutMs = opts.bootstatusTimeoutMs ?? DEFAULT_BOOTSTATUS_TIMEOUT_MS;
   if (device.platform === "ios") {
+    const isSim = await isIosSimulator(device.udid);
+    if (!isSim) {
+      // Physical iPhone/iPad. `simctl` only knows simulators and would exit
+      // with `Invalid device`; rely on maestro-runner's Appium-vendored WDA
+      // path to talk to the device.
+      //
+      // Note on UDIDs: Apple's tooling uses two identifiers for one device —
+      // the CoreDevice UUID (`FC709E4A-…`) shown by `devicectl list devices`,
+      // and the ECID (`00008030-…`) shown to xcodebuild. maestro-runner
+      // forwards the configured udid to xcodebuild's `-destination id=`,
+      // so the user must configure the ECID; the CoreDevice UUID will fail
+      // the WDA build downstream. We don't try to translate between them
+      // here — just verify *some* physical iOS device is paired so that an
+      // unplugged phone fails fast.
+      logSink(`[boot] devicectl list devices (physical) ${device.udid}`);
+      const probe = await execa("xcrun", ["devicectl", "list", "devices"], { reject: false });
+      if (probe.exitCode !== 0) {
+        throw new Error(
+          `[boot] xcrun devicectl failed (exit ${probe.exitCode}); is Xcode installed and the device paired?`,
+        );
+      }
+      if (!/iPhone|iPad/.test(probe.stdout)) {
+        throw new Error(
+          "[boot] no physical iOS device visible to devicectl; plug in and trust the phone, or pair it via Xcode > Devices",
+        );
+      }
+      return;
+    }
+
     if (rebootSimBefore) {
       logSink(`[boot] simctl shutdown ${device.udid}`);
       await execa("xcrun", ["simctl", "shutdown", device.udid], { reject: false });
