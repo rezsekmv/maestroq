@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { DeviceConfig } from "@maestroq/core";
 import { execa } from "execa";
 
@@ -63,16 +66,37 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
       // here — just verify *some* physical iOS device is paired so that an
       // unplugged phone fails fast.
       logSink(`[boot] devicectl list devices (physical) ${device.udid}`);
-      const probe = await execa("xcrun", ["devicectl", "list", "devices"], { reject: false });
-      if (probe.exitCode !== 0) {
-        throw new Error(
-          `[boot] xcrun devicectl failed (exit ${probe.exitCode}); is Xcode installed and the device paired?`,
+      // Use structured JSON output so detection is localization-agnostic and
+      // covers all physical device types (iPhone, iPad, iPod touch, etc.).
+      const jsonDir = mkdtempSync(join(tmpdir(), "maestroq-devicectl-"));
+      const jsonPath = join(jsonDir, "devices.json");
+      try {
+        const probe = await execa(
+          "xcrun",
+          ["devicectl", "list", "devices", "--json-output", jsonPath],
+          { reject: false },
         );
-      }
-      if (!/iPhone|iPad/.test(probe.stdout)) {
-        throw new Error(
-          "[boot] no physical iOS device visible to devicectl; plug in and trust the phone, or pair it via Xcode > Devices",
-        );
+        if (probe.exitCode !== 0) {
+          throw new Error(
+            `[boot] xcrun devicectl failed (exit ${probe.exitCode}); is Xcode installed and the device paired?`,
+          );
+        }
+        let deviceCount = 0;
+        try {
+          const parsed = JSON.parse(readFileSync(jsonPath, "utf8")) as {
+            result?: { devices?: unknown[] };
+          };
+          deviceCount = parsed.result?.devices?.length ?? 0;
+        } catch {
+          // JSON unreadable → treat as no devices found
+        }
+        if (deviceCount === 0) {
+          throw new Error(
+            "[boot] no physical iOS device visible to devicectl; plug in and trust the phone, or pair it via Xcode > Devices",
+          );
+        }
+      } finally {
+        rmSync(jsonDir, { recursive: true, force: true });
       }
       return;
     }

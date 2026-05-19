@@ -31,7 +31,7 @@ const PHYS_UDID = "FC709E4A-D053-5166-82DE-75E387268B2E";
 
 // xcrun fake:
 //  - `simctl list -j devices` → empty device map (so our udid is treated as physical)
-//  - `devicectl list devices`  → includes PHYS_UDID
+//  - `devicectl list devices --json-output <path>` → writes a JSON file with one device
 //  - `simctl bootstatus` would hang — but it must NEVER be called for physical
 const FAKE_PHYSICAL_XCRUN = `
 case "$1 $2" in
@@ -40,10 +40,9 @@ case "$1 $2" in
     exit 0
     ;;
   "devicectl list")
-    cat <<EOF
-Name            Identifier                             State                Model
-Mate's iPhone   ${PHYS_UDID}   available (paired)   iPhone SE (iPhone12,8)
-EOF
+    # The --json-output flag is arg 5; write the structured JSON there.
+    JSON_PATH="$5"
+    printf '{"result":{"devices":[{"identifier":"${PHYS_UDID}","connectionProperties":{"tunnelState":"connected"}}]}}' > "$JSON_PATH"
     exit 0
     ;;
   "simctl bootstatus")
@@ -77,7 +76,11 @@ describe("bootDevice: physical iOS device", () => {
     installFakeXcrun(`
 case "$1 $2" in
   "simctl list") echo '{"devices":{}}'; exit 0 ;;
-  "devicectl list") echo 'No paired devices found.'; exit 0 ;;
+  "devicectl list")
+    JSON_PATH="$5"
+    printf '{"result":{"devices":[]}}' > "$JSON_PATH"
+    exit 0
+    ;;
 esac
 exit 0
 `);
