@@ -102,7 +102,27 @@ describe("printJobs long (-l/--long)", () => {
       },
       { long: true },
     );
-    expect(output).toContain("failed 1/30");
+    expect(output).toContain("1/30 failed");
+  });
+
+  it("renders succeeded status with flow-count when flowsTotal is set", () => {
+    printJobs(
+      {
+        jobs: [
+          job({
+            id: "5eeeeeee",
+            status: "succeeded",
+            startedAt: now - 30_000,
+            finishedAt: now - 5_000,
+            exitCode: 0,
+            flowsTotal: 30,
+            flowsFailed: 0,
+          }),
+        ],
+      },
+      { long: true },
+    );
+    expect(output).toContain("30/30 passed");
   });
 
   it("renders bare 'error' status (no flow count attached)", () => {

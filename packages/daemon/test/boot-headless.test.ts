@@ -68,7 +68,14 @@ describe("bootDevice Android headless flag", () => {
       bootstatusTimeoutMs: 5_000,
     });
     const argv = await waitForArgv(2_000);
-    expect(argv).toEqual(["-avd", "Pixel_7", "-no-snapshot-load", "-no-window", "-no-audio", "-no-boot-anim"]);
+    expect(argv).toEqual([
+      "-avd",
+      "Pixel_7",
+      "-no-snapshot-load",
+      "-no-window",
+      "-no-audio",
+      "-no-boot-anim",
+    ]);
   });
 
   it("omits headless flags when headless: false", async () => {
