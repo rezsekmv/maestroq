@@ -74,11 +74,13 @@ export class Dispatcher extends EventEmitter {
   describeWorkers(): WorkerInfo[] {
     return this.workers.map((w) => {
       const label = this.deviceByUdid.get(w.udid)?.label;
+      const quarantinedUntil = w.getQuarantinedUntil();
       return {
         udid: w.udid,
         platform: w.platform,
         busy: w.isBusy(),
         ...(label ? { label } : {}),
+        ...(quarantinedUntil !== undefined ? { quarantinedUntil } : {}),
       };
     });
   }

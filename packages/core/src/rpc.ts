@@ -44,6 +44,10 @@ export const WorkerInfoSchema = z.object({
   platform: PlatformSchema,
   busy: z.boolean(),
   label: z.string().optional(),
+  // Epoch-ms cutoff when this worker exits quarantine. Present iff the
+  // worker is currently quarantined after consecutive `error` outcomes
+  // (failure-aware dispatch). Auto-clears on any non-error terminal.
+  quarantinedUntil: z.number().int().positive().optional(),
 });
 export type WorkerInfo = z.infer<typeof WorkerInfoSchema>;
 
