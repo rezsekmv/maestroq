@@ -73,10 +73,18 @@ export class JobQueue {
     return job;
   }
 
-  nextQueued(platform?: JobRecord["spec"]["platform"]): JobRecord | undefined {
+  nextQueued(platform?: JobRecord["spec"]["platform"], udid?: string): JobRecord | undefined {
     const candidates = this.state.jobs
       .filter((j) => j.status === "queued")
       .filter((j) => (platform ? j.spec.platform === platform : true))
+      // A pinned job (`spec.deviceUdid` set) can only be picked up by the
+      // matching worker. An unpinned job is eligible for any worker of the
+      // right platform. Callers that don't pass `udid` only see unpinned
+      // jobs — preserves prior behavior for callers that don't care.
+      .filter((j) => {
+        if (!j.spec.deviceUdid) return true;
+        return udid !== undefined && j.spec.deviceUdid === udid;
+      })
       .sort((a, b) => {
         const pri = b.spec.priority - a.spec.priority;
         if (pri !== 0) return pri;

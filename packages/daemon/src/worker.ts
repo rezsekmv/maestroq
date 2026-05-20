@@ -85,7 +85,7 @@ export class Worker extends EventEmitter {
 
   tryStart(): boolean {
     if (this.busy) return false;
-    const next = this.queue.nextQueued(this.device.platform);
+    const next = this.queue.nextQueued(this.device.platform, this.device.udid);
     if (!next) return false;
     this.busy = true;
     void this.run(next).finally(() => {

@@ -27,6 +27,11 @@ export const JobSpecSchema = z.object({
   priority: z.number().int().default(0),
   rebootSimBefore: z.boolean().default(false),
   label: z.string().optional(),
+  // Optional pin: only the worker whose device.udid matches will pick up
+  // this job. Falls back to platform-only matching when unset. Lets you
+  // route around a known-broken worker (broken emulator, flaky physical
+  // device) without restarting the daemon or editing config.
+  deviceUdid: z.string().min(1).optional(),
 });
 export type JobSpec = z.infer<typeof JobSpecSchema>;
 export type JobSpecInput = z.input<typeof JobSpecSchema>;

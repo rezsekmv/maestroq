@@ -139,9 +139,17 @@ const devices = defineCommand({
 
 const submit = defineCommand({
   meta: { name: "submit", description: "Submit a job spec; print the job id and return" },
-  args: { spec: { type: "positional", description: "Path to spec.yaml", required: true } },
+  args: {
+    spec: { type: "positional", description: "Path to spec.yaml", required: true },
+    device: {
+      type: "string",
+      description:
+        "Pin the job to a specific worker by udid (overrides any deviceUdid in the spec)",
+    },
+  },
   async run({ args }) {
     const spec = loadSpec(args.spec);
+    if (args.device) spec.deviceUdid = args.device;
     const r = await guard(() => callOnce({ op: "submit", spec }));
     const { jobId } = parsePayload(SubmitResponseSchema, r.payload, "submit");
     process.stdout.write(`${jobId}\n`);
@@ -299,9 +307,15 @@ const run = defineCommand({
       type: "boolean",
       description: "Submit and poll status to completion without streaming logs",
     },
+    device: {
+      type: "string",
+      description:
+        "Pin the job to a specific worker by udid (overrides any deviceUdid in the spec)",
+    },
   },
   async run({ args }) {
     const spec = loadSpec(args.spec);
+    if (args.device) spec.deviceUdid = args.device;
     const submission = await guard(() => callOnce({ op: "submit", spec }));
     const { jobId } = parsePayload(SubmitResponseSchema, submission.payload, "submit");
     process.stderr.write(`[maestroq] submitted ${jobId}\n`);
