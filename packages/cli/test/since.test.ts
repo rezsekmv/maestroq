@@ -46,18 +46,50 @@ describe("filterJobs (since-only)", () => {
     expect(result.jobs.map((j) => j.id)).toEqual(["fresh"]);
   });
 
-  it("returns empty when single-job payload is too old", () => {
-    const result = filterJobs(
-      { jobs: { createdAt: now - 7_200_000 } },
-      { sinceMs: 3_600_000, maxCount: null },
-    ) as { jobs: unknown[] };
-    expect(result.jobs).toEqual([]);
+  it("keeps a single-job payload regardless of since (user asked for a specific id)", () => {
+    const payload = { jobs: { createdAt: now - 7_200_000 } };
+    const result = filterJobs(payload, { sinceMs: 3_600_000, maxCount: null });
+    expect(result).toBe(payload);
   });
 
   it("keeps a single-job payload that is within the window", () => {
     const payload = { jobs: { createdAt: now - 5_000 } };
     const result = filterJobs(payload, { sinceMs: 3_600_000, maxCount: null });
     expect(result).toBe(payload);
+  });
+
+  it("always keeps active jobs even when their createdAt is older than --since", () => {
+    const result = filterJobs(
+      {
+        jobs: [
+          { id: "old-running", createdAt: now - 7_200_000, status: "running" },
+          { id: "old-done", createdAt: now - 7_200_000, status: "succeeded" },
+          { id: "new-done", createdAt: now - 5_000, status: "succeeded" },
+        ],
+      },
+      { sinceMs: 3_600_000, maxCount: null },
+    ) as { jobs: Array<{ id: string }> };
+    // old-running survives despite being outside --since
+    // old-done is correctly dropped
+    expect(result.jobs.map((j) => j.id).sort()).toEqual(["new-done", "old-running"]);
+  });
+
+  it("active jobs are kept even when maxCount would otherwise drop them", () => {
+    const result = filterJobs(
+      {
+        jobs: [
+          { id: "running-1", createdAt: now - 7_000, status: "running" },
+          { id: "running-2", createdAt: now - 6_000, status: "running" },
+          { id: "done-1", createdAt: now - 5_000, status: "succeeded" },
+          { id: "done-2", createdAt: now - 4_000, status: "succeeded" },
+          { id: "done-3", createdAt: now - 3_000, status: "succeeded" },
+        ],
+      },
+      { sinceMs: null, maxCount: 2 },
+    ) as { jobs: Array<{ id: string }> };
+    // 2 active + the 1 most-recent inactive (kept to fit the 2-cap budget after actives)
+    // Actually: maxCount is 2, both running jobs are forced in, no inactive fits.
+    expect(result.jobs.map((j) => j.id).sort()).toEqual(["running-1", "running-2"]);
   });
 });
 

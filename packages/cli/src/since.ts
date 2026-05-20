@@ -1,3 +1,5 @@
+import { ActiveStatuses, type JobStatus } from "@maestroq/core";
+
 const DEFAULT_SINCE_MS = 60 * 60 * 1000; // 1 hour
 export const DEFAULT_LIMIT = 10;
 
@@ -37,6 +39,7 @@ export function parseLimit(raw: string | undefined): number {
 
 interface JobLike {
   createdAt: number;
+  status?: JobStatus;
 }
 interface JobsPayload {
   jobs: JobLike[] | JobLike | undefined;
@@ -47,22 +50,34 @@ export interface FilterOptions {
   maxCount: number | null; // null = no count cap
 }
 
+function isActive(j: JobLike): boolean {
+  return j.status !== undefined && ActiveStatuses.has(j.status);
+}
+
 export function filterJobs(payload: unknown, opts: FilterOptions): unknown {
   const p = payload as JobsPayload;
   const jobs = p.jobs;
   if (!jobs) return p;
   if (!Array.isArray(jobs)) {
-    if (opts.sinceMs == null) return p;
-    return jobs.createdAt >= Date.now() - opts.sinceMs ? p : { ...p, jobs: [] };
+    // Single-job lookup — never filter out; the user asked for a specific id.
+    return p;
   }
   let kept = jobs;
+  // Always include currently-active jobs (queued, building, installing,
+  // metro-starting, running, tearing-down) regardless of since/limit —
+  // a 35-minute build shouldn't vanish from `maestroq status` because the
+  // default since-window is 1h relative to createdAt.
   if (opts.sinceMs != null) {
     const cutoff = Date.now() - opts.sinceMs;
-    kept = kept.filter((j) => j.createdAt >= cutoff);
+    kept = kept.filter((j) => j.createdAt >= cutoff || isActive(j));
   }
   if (opts.maxCount != null && kept.length > opts.maxCount) {
-    kept = [...kept].sort((a, b) => b.createdAt - a.createdAt).slice(0, opts.maxCount);
-    kept.sort((a, b) => a.createdAt - b.createdAt);
+    const active = kept.filter(isActive);
+    const inactive = kept
+      .filter((j) => !isActive(j))
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, Math.max(0, opts.maxCount - active.length));
+    kept = [...active, ...inactive].sort((a, b) => a.createdAt - b.createdAt);
   }
   return { ...p, jobs: kept };
 }
