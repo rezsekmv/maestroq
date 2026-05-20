@@ -82,4 +82,11 @@ export class Dispatcher extends EventEmitter {
       };
     });
   }
+
+  // Used by the status RPC to annotate jobs with the friendly device label
+  // (read from the current `~/.maestroq/config.yaml`). Returns undefined if
+  // the udid doesn't match a configured device or the device has no label.
+  getDeviceLabel(udid: string): string | undefined {
+    return this.deviceByUdid.get(udid)?.label;
+  }
 }

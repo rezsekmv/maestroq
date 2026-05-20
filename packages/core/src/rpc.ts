@@ -53,8 +53,17 @@ export type PingResponse = z.infer<typeof PingResponseSchema>;
 export const SubmitResponseSchema = z.object({ jobId: z.string() });
 export type SubmitResponse = z.infer<typeof SubmitResponseSchema>;
 
+// JobRecord + runtime annotations the server attaches at response time.
+// `deviceLabel` comes from the matching device entry in `~/.maestroq/config.yaml`
+// (resolved via deviceUdid). Not persisted in queue.json since labels are a
+// display detail of the current config, not part of the job's identity.
+export const EnrichedJobRecordSchema = JobRecordSchema.extend({
+  deviceLabel: z.string().optional(),
+});
+export type EnrichedJobRecord = z.infer<typeof EnrichedJobRecordSchema>;
+
 export const StatusResponseSchema = z.object({
-  jobs: z.union([JobRecordSchema, z.array(JobRecordSchema)]).optional(),
+  jobs: z.union([EnrichedJobRecordSchema, z.array(EnrichedJobRecordSchema)]).optional(),
 });
 export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 

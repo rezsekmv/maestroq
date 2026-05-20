@@ -101,7 +101,9 @@ export class JobQueue {
     const interrupted: JobRecord[] = [];
     for (const job of this.state.jobs) {
       if (ActiveStatuses.has(job.status)) {
-        job.status = "failed" satisfies JobStatus;
+        // Daemon-crash recovery interrupts a setup/build/test step — none
+        // of those reached a test verdict, so this is `error`, not `failed`.
+        job.status = "error" satisfies JobStatus;
         job.failureReason = reason;
         job.finishedAt = Date.now();
         interrupted.push(job);

@@ -37,7 +37,12 @@ const STATUS_COLOR: Record<JobStatus, PaintColor> = {
   running: "yellow",
   "tearing-down": "yellow",
   succeeded: "green",
+  // Flow assertions failed — bug in the app or in the test. Red.
   failed: "red",
+  // Setup / infrastructure problem — device unhealthy, build failed before
+  // tests started, daemon-crash recovery. Magenta to distinguish from
+  // "tests ran and failed".
+  error: "magenta",
   cancelled: "gray",
 };
 

@@ -213,27 +213,50 @@ export class Worker extends EventEmitter {
         logSink: sink,
       });
 
+      // Persist flow counts whenever the maestro phase emitted a TOTAL line,
+      // regardless of pass/fail. Lets `status -l` show "failed 1/30" etc.
+      const flowFields = {
+        ...(result.flowsTotal !== undefined ? { flowsTotal: result.flowsTotal } : {}),
+        ...(result.flowsFailed !== undefined ? { flowsFailed: result.flowsFailed } : {}),
+      };
+
       if (this.cancelled.has(job.id)) {
-        this.queue.update(job.id, { finishedAt: Date.now(), exitCode: result.exitCode });
-        await closeLog();
-        this.setStatus(job.id, "cancelled", { exitCode: result.exitCode });
-      } else if (result.exitCode === 0) {
-        this.queue.update(job.id, { finishedAt: Date.now(), exitCode: 0 });
-        await closeLog();
-        this.setStatus(job.id, "succeeded", { exitCode: 0 });
-      } else {
         this.queue.update(job.id, {
           finishedAt: Date.now(),
           exitCode: result.exitCode,
-          failureReason: `maestro exit ${result.exitCode}`,
+          ...flowFields,
         });
         await closeLog();
-        this.setStatus(job.id, "failed", {
+        this.setStatus(job.id, "cancelled", { exitCode: result.exitCode });
+      } else if (result.exitCode === 0) {
+        this.queue.update(job.id, { finishedAt: Date.now(), exitCode: 0, ...flowFields });
+        await closeLog();
+        this.setStatus(job.id, "succeeded", { exitCode: 0 });
+      } else {
+        // Maestro ran but exited non-zero. If we have flow counts the failure
+        // is "tests failed" (status: failed). If we don't, the runner itself
+        // errored before producing a TOTAL — treat as setup error.
+        const isFlowFailure = result.flowsTotal !== undefined && result.flowsTotal > 0;
+        const terminalStatus: JobStatus = isFlowFailure ? "failed" : "error";
+        const reason = isFlowFailure
+          ? `${result.flowsFailed}/${result.flowsTotal} flows failed`
+          : `maestro exit ${result.exitCode} before tests started`;
+        this.queue.update(job.id, {
+          finishedAt: Date.now(),
           exitCode: result.exitCode,
-          failureReason: `maestro exit ${result.exitCode}`,
+          failureReason: reason,
+          ...flowFields,
+        });
+        await closeLog();
+        this.setStatus(job.id, terminalStatus, {
+          exitCode: result.exitCode,
+          failureReason: reason,
         });
       }
     } catch (err) {
+      // Reached only when bootDevice / buildApp / startMetro / runMaestro
+      // (or anything in this try block) threw. That's a setup/infrastructure
+      // problem, distinct from "tests ran and failed" — record as `error`.
       const message = err instanceof Error ? err.message : String(err);
       sink(`[error] ${message}`);
       try {
@@ -250,7 +273,7 @@ export class Worker extends EventEmitter {
       }
       this.queue.update(job.id, { finishedAt: Date.now(), failureReason: message });
       await closeLog();
-      this.setStatus(job.id, this.cancelled.has(job.id) ? "cancelled" : "failed", {
+      this.setStatus(job.id, this.cancelled.has(job.id) ? "cancelled" : "error", {
         failureReason: message,
       });
     } finally {
