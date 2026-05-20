@@ -154,10 +154,14 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
   }
 
   const avd = device.avdName ?? device.udid;
-  logSink(`[boot] emulator -avd ${avd}`);
+  const emulatorArgs = ["-avd", avd, "-no-snapshot-load"];
+  if (device.headless) {
+    emulatorArgs.push("-no-window", "-no-audio", "-no-boot-anim");
+  }
+  logSink(`[boot] emulator ${emulatorArgs.join(" ")}`);
   // emulator runs in background; we just wait for adb to see the device.
   // Spawn detached, don't await, then poll adb wait-for-device.
-  const child = execa("emulator", ["-avd", avd, "-no-snapshot-load"], {
+  const child = execa("emulator", emulatorArgs, {
     detached: true,
     stdio: "ignore",
   });

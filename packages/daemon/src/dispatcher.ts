@@ -34,6 +34,14 @@ export class Dispatcher extends EventEmitter {
         "max_concurrent_ios ignored under runner=maestro-runner (every configured iOS device runs in parallel)",
       );
     }
+    for (const d of devices) {
+      if (d.platform === "ios" && d.headless) {
+        logger.warn(
+          { udid: d.udid },
+          "headless: true is a no-op on iOS; the daemon does not control Simulator.app — quit it manually (`osascript -e 'quit app \"Simulator\"'`) to run headlessly",
+        );
+      }
+    }
   }
 
   start(): void {

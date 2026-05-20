@@ -172,6 +172,10 @@ Per-project specs and per-project config live under `.maestro/` at the project r
 
 `init.ts:writeStarterSpecs` scaffolds into `.maestro/`, and `examples/plain-rn/` demonstrates the convention. Anywhere docs mention spec paths, write `.maestro/<name>.yaml`, not `maestroq/<name>.yaml` — the latter is deprecated.
 
+### Headless devices
+
+Per-device `headless: true` in `~/.maestroq/config.yaml`. On Android, the daemon appends `-no-window -no-audio -no-boot-anim` to the `emulator -avd` spawn — only effective when the daemon actually cold-boots the emulator (`adb get-state` reports it unreachable). On iOS the flag is declarative: `simctl boot` is already headless, but `Simulator.app` (if running) attaches a window to every booted sim and the daemon does not control it. The dispatcher logs a one-shot `WARN` if `headless: true` is set on an iOS device, pointing the user at `osascript -e 'quit app "Simulator"'`.
+
 ### Commits
 
 - **Conventional Commits.** Subject: `<type>: <imperative summary>` (or `<type>(<scope>): …`). Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`. Bump level still comes from the `.changeset/*.md` file — the prefix is for readability, not versioning.

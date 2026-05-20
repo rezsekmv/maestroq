@@ -14,6 +14,12 @@ export const DeviceConfigSchema = z.object({
   // device name Expo expects (e.g. `CPH2307`). When unset, falls back to
   // `avdName` (Android emulators), then `udid` (all platforms).
   expoDeviceName: z.string().min(1).optional(),
+  // Android: append `-no-window -no-audio -no-boot-anim` when the daemon
+  // cold-boots the emulator. iOS: declarative only — `simctl boot` is
+  // already headless; whether a window appears depends on Simulator.app,
+  // which the daemon does not control. The dispatcher logs a one-shot
+  // warning if this is set on an iOS device.
+  headless: z.boolean().default(false),
 });
 export type DeviceConfig = z.infer<typeof DeviceConfigSchema>;
 
