@@ -11,6 +11,7 @@ import {
   RpcRequestSchema,
   SOCKET_PATH,
 } from "@maestroq/core";
+import { listCacheEntries, pruneCacheEntries } from "./build-cache.js";
 import type { Dispatcher } from "./dispatcher.js";
 import { logger } from "./logger.js";
 import type { JobQueue } from "./queue.js";
@@ -259,6 +260,28 @@ async function dispatchRequest(
         deleteArtifacts: req.deleteArtifacts,
       });
       send(client.socket, { kind: "ok", payload: { removed } });
+      send(client.socket, { kind: "end" });
+      return;
+    }
+
+    case "cache-list": {
+      send(client.socket, { kind: "ok", payload: { entries: listCacheEntries() } });
+      send(client.socket, { kind: "end" });
+      return;
+    }
+
+    case "cache-prune": {
+      const removed = pruneCacheEntries(
+        {
+          cwd: req.cwd,
+          head: req.head,
+          platform: req.platform,
+          variant: req.variant,
+          deviceUdid: req.deviceUdid,
+        },
+        { all: req.all, dryRun: req.dryRun },
+      );
+      send(client.socket, { kind: "ok", payload: { removed, dryRun: req.dryRun ?? false } });
       send(client.socket, { kind: "end" });
       return;
     }

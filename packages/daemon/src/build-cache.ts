@@ -107,6 +107,67 @@ export function recordSuccessfulBuild(key: CacheKey, deviceKey: string): void {
   persistCache();
 }
 
+export interface CacheEntry {
+  key: CacheKey;
+  // The device UDID this entry was recorded against. Stored as the trailing
+  // segment of the in-memory map key (`<cwd>::<platform>::<variant>::<udid>`).
+  deviceUdid: string;
+}
+
+export function listCacheEntries(): CacheEntry[] {
+  const out: CacheEntry[] = [];
+  for (const [mapKey, key] of lastBuilds.entries()) {
+    const lastSep = mapKey.lastIndexOf("::");
+    const deviceUdid = lastSep >= 0 ? mapKey.slice(lastSep + 2) : "";
+    out.push({ key, deviceUdid });
+  }
+  return out;
+}
+
+export interface PruneFilter {
+  cwd?: string;
+  head?: string;
+  platform?: CacheKey["platform"];
+  variant?: CacheKey["variant"];
+  deviceUdid?: string;
+}
+
+// Remove entries matching ALL fields of `filter`. Empty filter removes
+// nothing — callers must opt in to wiping everything via the `all: true`
+// flag so we never accidentally clobber the cache.
+export function pruneCacheEntries(
+  filter: PruneFilter,
+  opts: { all?: boolean; dryRun?: boolean } = {},
+): CacheEntry[] {
+  const matched: CacheEntry[] = [];
+  for (const [mapKey, key] of lastBuilds.entries()) {
+    const lastSep = mapKey.lastIndexOf("::");
+    const deviceUdid = lastSep >= 0 ? mapKey.slice(lastSep + 2) : "";
+    if (!opts.all) {
+      const filterEmpty =
+        filter.cwd === undefined &&
+        filter.head === undefined &&
+        filter.platform === undefined &&
+        filter.variant === undefined &&
+        filter.deviceUdid === undefined;
+      if (filterEmpty) continue; // safety: don't prune everything by accident
+      if (filter.cwd !== undefined && key.cwd !== filter.cwd) continue;
+      if (filter.head !== undefined && key.head !== filter.head) continue;
+      if (filter.platform !== undefined && key.platform !== filter.platform) continue;
+      if (filter.variant !== undefined && key.variant !== filter.variant) continue;
+      if (filter.deviceUdid !== undefined && deviceUdid !== filter.deviceUdid) continue;
+    }
+    matched.push({ key, deviceUdid });
+  }
+  if (!opts.dryRun) {
+    for (const e of matched) {
+      lastBuilds.delete(`${keyId(e.key)}::${e.deviceUdid}`);
+    }
+    if (matched.length > 0) persistCache();
+  }
+  return matched;
+}
+
 export function _resetCacheForTests(path?: string): void {
   lastBuilds.clear();
   cachePath = path ?? BUILD_CACHE_PATH;

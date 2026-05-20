@@ -21,6 +21,19 @@ export const RpcRequestSchema = z.discriminatedUnion("op", [
     deleteLogs: z.boolean().optional(),
     deleteArtifacts: z.boolean().optional(),
   }),
+  z.object({ op: z.literal("cache-list") }),
+  z.object({
+    op: z.literal("cache-prune"),
+    // Filter — entries match ALL fields that are present.
+    cwd: z.string().min(1).optional(),
+    head: z.string().min(1).optional(),
+    platform: z.enum(["ios", "android"]).optional(),
+    variant: z.enum(["debug", "release"]).optional(),
+    deviceUdid: z.string().min(1).optional(),
+    // Opt-in switch to wipe everything; empty filter alone is a no-op.
+    all: z.boolean().optional(),
+    dryRun: z.boolean().optional(),
+  }),
 ]);
 export type RpcRequest = z.infer<typeof RpcRequestSchema>;
 
@@ -76,6 +89,30 @@ export type CancelResponse = z.infer<typeof CancelResponseSchema>;
 
 export const DevicesResponseSchema = z.object({ devices: z.array(WorkerInfoSchema) });
 export type DevicesResponse = z.infer<typeof DevicesResponseSchema>;
+
+const CacheKeySchema = z.object({
+  cwd: z.string(),
+  head: z.string(),
+  platform: z.enum(["ios", "android"]),
+  variant: z.enum(["debug", "release"]),
+  envHash: z.string(),
+});
+
+const CacheEntrySchema = z.object({
+  key: CacheKeySchema,
+  deviceUdid: z.string(),
+});
+
+export const CacheListResponseSchema = z.object({
+  entries: z.array(CacheEntrySchema),
+});
+export type CacheListResponse = z.infer<typeof CacheListResponseSchema>;
+
+export const CachePruneResponseSchema = z.object({
+  removed: z.array(CacheEntrySchema),
+  dryRun: z.boolean(),
+});
+export type CachePruneResponse = z.infer<typeof CachePruneResponseSchema>;
 
 export function encodeMessage(obj: unknown): string {
   return `${JSON.stringify(obj)}\n`;
