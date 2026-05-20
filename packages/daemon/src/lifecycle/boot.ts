@@ -131,5 +131,21 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
     stdio: "ignore",
   });
   child.unref();
-  await execa("adb", ["-s", device.udid, "wait-for-device"]);
+  // If the emulator exits non-zero (e.g. wrong AVD name), execa's promise
+  // rejects. Without `.catch`, Node's default unhandled-rejection policy
+  // crashes the daemon. Swallow it here; the user-visible failure comes
+  // from `adb wait-for-device` timing out below with a clear message.
+  child.catch(() => {});
+
+  try {
+    await execa("adb", ["-s", device.udid, "wait-for-device"], {
+      timeout: bootstatusTimeoutMs,
+      killSignal: "SIGKILL",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `[boot] adb wait-for-device timed out or failed for AVD "${avd}" (udid ${device.udid}): ${message}`,
+    );
+  }
 }
