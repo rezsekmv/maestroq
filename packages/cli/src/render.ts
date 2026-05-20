@@ -62,12 +62,14 @@ const PLAT_COL: Column = { name: "PLAT", width: 7, value: (j) => j.spec.platform
 const STATUS_COL: Column = {
   name: "STATUS",
   width: 14,
-  // Render `failed (X/Y)` when the maestro phase emitted a TOTAL line, so
-  // the user can tell "1 flow out of 30 failed" from "everything failed".
-  // `error` and other statuses render as the bare status word.
+  // When the maestro phase emitted a TOTAL line, lead with the count and
+  // follow with the word: `30/30 passed` on success, `1/30 failed` on
+  // failure — same shape maestro itself prints. `error` and other statuses
+  // render as the bare status word.
   value: (j) => {
-    if (j.status === "failed" && j.flowsTotal !== undefined) {
-      return `failed ${j.flowsFailed ?? "?"}/${j.flowsTotal}`;
+    if (j.flowsTotal !== undefined) {
+      if (j.status === "succeeded") return `${j.flowsTotal}/${j.flowsTotal} passed`;
+      if (j.status === "failed") return `${j.flowsFailed ?? "?"}/${j.flowsTotal} failed`;
     }
     return j.status;
   },
