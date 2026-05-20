@@ -52,6 +52,25 @@ function parsePayload<S extends ZodTypeAny>(schema: S, payload: unknown, op: str
   return parsed.data;
 }
 
+async function confirm(message: string): Promise<boolean> {
+  if (!process.stdin.isTTY) {
+    process.stderr.write(
+      `${message}\n[maestroq] stdin is not a TTY; refusing to prompt — pass --yes to proceed.\n`,
+    );
+    return false;
+  }
+  process.stderr.write(`${message} `);
+  return new Promise<boolean>((resolve) => {
+    const onData = (chunk: Buffer): void => {
+      process.stdin.pause();
+      const answer = chunk.toString().trim().toLowerCase();
+      resolve(answer === "y" || answer === "yes");
+    };
+    process.stdin.resume();
+    process.stdin.once("data", onData);
+  });
+}
+
 const daemonStart = defineCommand({
   meta: { name: "start", description: "Start the maestroq daemon in the foreground" },
   args: {
@@ -125,7 +144,7 @@ const devices = defineCommand({
   meta: { name: "devices", description: "List configured devices and their busy state" },
   args: {
     json: { type: "boolean", description: "Emit JSON" },
-    color: { type: "string", description: "auto (default) | always | never" },
+    color: { type: "string", alias: "c", description: "auto (default) | always | never" },
   },
   async run({ args }) {
     const r = await guard(() => callOnce({ op: "devices" }));
@@ -192,7 +211,7 @@ const status = defineCommand({
       type: "string",
       description: "Refresh interval in seconds when --watch is on (default 2).",
     },
-    color: { type: "string", description: "auto (default) | always | never" },
+    color: { type: "string", alias: "c", description: "auto (default) | always | never" },
   },
   async run({ args }) {
     const filterOpts =
@@ -436,8 +455,8 @@ const prune = defineCommand({
   args: {
     "older-than": {
       type: "string",
-      description: "Duration (e.g. 7d, 2h, 30m, 0s). Required.",
-      required: true,
+      description: "Duration (e.g. 7d, 2h, 30m). Default: 0s (prune everything matching).",
+      default: "0s",
     },
     statuses: {
       type: "string",
@@ -445,6 +464,7 @@ const prune = defineCommand({
     },
     "keep-logs": { type: "boolean", description: "Do not delete log files" },
     "keep-artifacts": { type: "boolean", description: "Do not delete artifact directories" },
+    yes: { type: "boolean", alias: "y", description: "Skip confirmation prompt" },
   },
   async run({ args }) {
     const olderThanMs = parseDuration(String(args["older-than"]));
@@ -472,6 +492,22 @@ const prune = defineCommand({
         out.push(p as JobStatus);
       }
       statuses = out;
+    }
+    if (!args.yes) {
+      const statusList = (statuses ?? ["succeeded", "failed", "cancelled"]).join(",");
+      const olderThan = String(args["older-than"]);
+      const extras = [
+        args["keep-logs"] ? null : "logs",
+        args["keep-artifacts"] ? null : "artifacts",
+      ].filter(Boolean);
+      const extrasStr = extras.length > 0 ? ` and their ${extras.join(" + ")}` : "";
+      const ok = await confirm(
+        `Prune terminal jobs older than ${olderThan} [${statusList}]${extrasStr}? [y/N]`,
+      );
+      if (!ok) {
+        process.stderr.write("Aborted.\n");
+        process.exit(1);
+      }
     }
     const req = {
       op: "prune" as const,
@@ -580,7 +616,7 @@ const cache = defineCommand({
 });
 
 const main = defineCommand({
-  meta: { name: "maestroq", description: "maestroq CLI client", version: VERSION },
+  meta: { name: "maestroq", description: "Manage and queue up maestro tests.", version: VERSION },
   subCommands: {
     daemon,
     devices,

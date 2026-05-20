@@ -73,7 +73,7 @@ describe("maestroq prune CLI", () => {
     fake = await startFake(socketPath, { removed: 3 }, capturePath);
     const r = spawnSync(
       "node",
-      [MQ, "prune", "--older-than", "7d", "--statuses", "succeeded,failed"],
+      [MQ, "prune", "-y", "--older-than", "7d", "--statuses", "succeeded,failed"],
       { env: { ...process.env, HOME: home }, encoding: "utf8", timeout: 8_000 },
     );
     expect(r.status).toBe(0);
@@ -91,7 +91,7 @@ describe("maestroq prune CLI", () => {
     fake = await startFake(socketPath, { removed: 0 }, capturePath);
     const r = spawnSync(
       "node",
-      [MQ, "prune", "--older-than", "1h", "--keep-logs", "--keep-artifacts"],
+      [MQ, "prune", "-y", "--older-than", "1h", "--keep-logs", "--keep-artifacts"],
       { env: { ...process.env, HOME: home }, encoding: "utf8", timeout: 8_000 },
     );
     expect(r.status).toBe(0);
@@ -100,5 +100,32 @@ describe("maestroq prune CLI", () => {
     expect(req.deleteLogs).toBe(false);
     expect(req.deleteArtifacts).toBe(false);
     expect(req.olderThanMs).toBe(3_600_000);
+  });
+
+  it("refuses without --yes when stdin is not a TTY", async () => {
+    if (!existsSync(MQ)) throw new Error(`maestroq binary missing at ${MQ}. Run npm run build.`);
+    fake = await startFake(socketPath, { removed: 99 }, capturePath);
+    const r = spawnSync("node", [MQ, "prune"], {
+      env: { ...process.env, HOME: home },
+      encoding: "utf8",
+      timeout: 8_000,
+    });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("stdin is not a TTY");
+    expect(existsSync(capturePath)).toBe(false);
+  });
+
+  it("--older-than defaults to 0s and -y skips the prompt", async () => {
+    if (!existsSync(MQ)) throw new Error(`maestroq binary missing at ${MQ}. Run npm run build.`);
+    fake = await startFake(socketPath, { removed: 5 }, capturePath);
+    const r = spawnSync("node", [MQ, "prune", "-y"], {
+      env: { ...process.env, HOME: home },
+      encoding: "utf8",
+      timeout: 8_000,
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout.trim()).toBe("Pruned 5 jobs.");
+    const req = captured();
+    expect(req.olderThanMs).toBe(0);
   });
 });
