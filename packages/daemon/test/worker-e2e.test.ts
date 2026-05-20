@@ -48,11 +48,18 @@ function waitForTerminal(worker: Worker): Promise<WorkerEvent> {
 describe("Worker end-to-end (fake binaries)", () => {
   it("drives a build:'skip' android job through building→running→succeeded", async () => {
     // adb get-state must return "device" so bootDevice short-circuits without
-    // launching the emulator. adb wait-for-device is unused on this path.
+    // launching the emulator. The PackageManager probe (`pm list packages
+    // android`) must also report `package:android` so bootDevice doesn't
+    // throw on the new health check.
     installFake(
       "adb",
       `case "$3" in
   get-state) echo device; exit 0 ;;
+  shell)
+    case "$4 $5 $6 $7" in
+      "pm list packages android") echo "package:android"; exit 0 ;;
+    esac
+    ;;
   *) exit 0 ;;
 esac`,
     );

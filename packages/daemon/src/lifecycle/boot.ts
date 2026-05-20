@@ -13,6 +13,29 @@ export interface BootOptions {
 
 export const DEFAULT_BOOTSTATUS_TIMEOUT_MS = 60_000;
 
+// Confirms Android's PackageManager is responsive. A booted-but-broken
+// emulator (e.g. system_server stuck on first run) keeps `adb get-state`
+// happy but rejects `pm list packages` with `cmd: Can't find service: package`.
+// Without this probe the worker drives a full release build before the
+// failure surfaces at `adb install`.
+async function assertPackageManagerHealthy(
+  udid: string,
+  logSink: (line: string) => void,
+): Promise<void> {
+  const r = await execa("adb", ["-s", udid, "shell", "pm", "list", "packages", "android"], {
+    reject: false,
+    timeout: 4_000,
+    killSignal: "SIGKILL",
+  });
+  const stdout = (r.stdout ?? "") + (r.stderr ?? "");
+  if (r.exitCode === 0 && /^package:android$/m.test(stdout)) return;
+  logSink(`[boot] pm probe failed: exit=${r.exitCode} out="${stdout.trim().slice(0, 120)}"`);
+  throw new Error(
+    `[boot] Android device ${udid} reachable via adb but PackageManager is unhealthy ` +
+      "(`cmd: Can't find service: package` or no `android` package). Reboot the emulator/device and retry.",
+  );
+}
+
 // Probe whether an iOS UDID points at a simulator. `xcrun simctl list -j devices`
 // emits a JSON map of runtime → device[]; physical devices are absent.
 // We cache the result for the lifetime of the daemon — a UDID's "is-simulator-ness"
@@ -120,7 +143,15 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
 
   logSink(`[boot] adb -s ${device.udid} get-state`);
   const probe = await execa("adb", ["-s", device.udid, "get-state"], { reject: false });
-  if (probe.exitCode === 0 && probe.stdout.includes("device")) return;
+  if (probe.exitCode === 0 && probe.stdout.includes("device")) {
+    // Device is reachable, but Android's PackageManager can be "dead" while
+    // adb still answers (`cmd: Can't find service: package` from a hung
+    // system_server). Without this probe the worker happily builds for
+    // 20+ min then dies at `adb install`. A 4 s ping catches it before
+    // we burn the build cycle.
+    await assertPackageManagerHealthy(device.udid, logSink);
+    return;
+  }
 
   const avd = device.avdName ?? device.udid;
   logSink(`[boot] emulator -avd ${avd}`);
@@ -142,6 +173,15 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
       timeout: bootstatusTimeoutMs,
       killSignal: "SIGKILL",
     });
+    // wait-for-device only proves adbd is listening; PackageManager comes
+    // up later. Wait briefly (up to bootstatusTimeoutMs) for `sys.boot_completed`
+    // then check PM is responsive — same rationale as the get-state path.
+    await execa(
+      "adb",
+      ["-s", device.udid, "shell", "while [ \"$(getprop sys.boot_completed)\" != 1 ]; do sleep 1; done"],
+      { timeout: bootstatusTimeoutMs, killSignal: "SIGKILL", reject: false },
+    );
+    await assertPackageManagerHealthy(device.udid, logSink);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(
