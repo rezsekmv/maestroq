@@ -136,7 +136,36 @@ describe("printJobs long (-l/--long)", () => {
       { jobs: [job({ status: "succeeded", startedAt, finishedAt, exitCode: 0 })] },
       { long: true },
     );
-    expect(output).toMatch(/succeeded\s+\d+s\s+\d+m\d+s\s+85\.0s\s+0\s+smoke iOS/);
+    // 85 s elapsed → "1m25s" in the human-units DUR column.
+    expect(output).toMatch(/succeeded\s+\d+s\s+\d+m\d+s\s+1m25s\s+0\s+smoke iOS/);
+  });
+
+  it("renders DUR < 60s with tenths precision (smoke-test regime)", () => {
+    printJobs(
+      {
+        jobs: [job({ status: "succeeded", startedAt: now - 7_300, finishedAt: now, exitCode: 0 })],
+      },
+      { long: true },
+    );
+    // 7.3 s elapsed → "7.3s"; the tenths matter for short flows.
+    expect(output).toMatch(/\s7\.3s\s/);
+  });
+
+  it("renders DUR ≥ 1h with h+m", () => {
+    printJobs(
+      {
+        jobs: [
+          job({
+            status: "succeeded",
+            startedAt: now - 3 * 3_600_000 - 17 * 60_000,
+            finishedAt: now,
+            exitCode: 0,
+          }),
+        ],
+      },
+      { long: true },
+    );
+    expect(output).toMatch(/\s3h17m\s/);
   });
 
   it("shows the worktree basename and truncates long ones", () => {

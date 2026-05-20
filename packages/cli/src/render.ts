@@ -86,9 +86,13 @@ const STARTED_COL: Column = {
 const DUR_COL: Column = {
   name: "DUR",
   width: 8,
+  // Human units instead of raw seconds. A 31-min job reads "31m24s",
+  // not "1884.2s". Short runs (<60s) still render as e.g. "5.3s" so
+  // sub-minute precision isn't lost — that's the regime where the
+  // tenths-of-a-second matter.
   value: (j, now) => {
-    if (j.startedAt && j.finishedAt) return `${((j.finishedAt - j.startedAt) / 1000).toFixed(1)}s`;
-    if (j.startedAt) return `${((now - j.startedAt) / 1000).toFixed(1)}s`;
+    if (j.startedAt && j.finishedAt) return formatDuration(j.finishedAt - j.startedAt);
+    if (j.startedAt) return formatDuration(now - j.startedAt);
     return "-";
   },
 };
@@ -169,6 +173,22 @@ function relTime(ts: number, now: number): string {
   const diff = Math.max(0, now - ts);
   const s = Math.floor(diff / 1000);
   if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m${s % 60}s`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h${m % 60}m`;
+  return `${Math.floor(h / 24)}d${h % 24}h`;
+}
+
+// Render an elapsed-time interval (ms) in human units. Sub-minute jobs
+// keep the historical "X.Xs" precision so quick smoke runs don't lose
+// their tenths; everything ≥ 1 min drops to integer seconds inside the
+// minute, then minutes inside the hour, then hours inside the day —
+// same convention as `relTime` above.
+export function formatDuration(ms: number): string {
+  const clamped = Math.max(0, ms);
+  if (clamped < 60_000) return `${(clamped / 1000).toFixed(1)}s`;
+  const s = Math.floor(clamped / 1000);
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m${s % 60}s`;
   const h = Math.floor(m / 60);
