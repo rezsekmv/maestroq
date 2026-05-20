@@ -489,9 +489,117 @@ const config = defineCommand({
   subCommands: { edit: configEdit },
 });
 
+const cacheList = defineCommand({
+  meta: { name: "list", description: "Show every entry in ~/.maestroq/build-cache.json" },
+  args: { json: { type: "boolean", description: "Emit JSON" } },
+  async run({ args }) {
+    const r = await guard(() => callOnce({ op: "cache-list" }));
+    if (r.error) {
+      process.stderr.write(`${r.error}\n`);
+      process.exit(1);
+    }
+    const payload = (r.payload ?? {}) as {
+      entries: Array<{
+        key: { cwd: string; head: string; platform: string; variant: string; envHash: string };
+        deviceUdid: string;
+      }>;
+    };
+    if (args.json) {
+      process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+      return;
+    }
+    if (payload.entries.length === 0) {
+      process.stdout.write("(build cache empty)\n");
+      return;
+    }
+    for (const e of payload.entries) {
+      const { cwd, head, platform, variant } = e.key;
+      process.stdout.write(
+        `${head.slice(0, 8)} ${platform.padEnd(8)} ${variant.padEnd(8)} ${e.deviceUdid.padEnd(24)} ${cwd}\n`,
+      );
+    }
+  },
+});
+
+const cachePrune = defineCommand({
+  meta: { name: "prune", description: "Remove entries from the build cache" },
+  args: {
+    all: { type: "boolean", description: "Remove every entry (overrides filters)" },
+    cwd: { type: "string", description: "Match entries whose cwd is this exact path" },
+    head: { type: "string", description: "Match entries at this git HEAD" },
+    platform: { type: "string", description: "Match entries with this platform (ios|android)" },
+    variant: { type: "string", description: "Match entries with this variant (debug|release)" },
+    device: { type: "string", description: "Match entries recorded for this device udid" },
+    "dry-run": {
+      type: "boolean",
+      description: "Show what would be removed; don't change the cache",
+    },
+  },
+  async run({ args }) {
+    const filterEmpty = !args.cwd && !args.head && !args.platform && !args.variant && !args.device;
+    if (filterEmpty && !args.all) {
+      process.stderr.write(
+        "Pass at least one of --all / --cwd / --head / --platform / --variant / --device.\n",
+      );
+      process.exit(2);
+    }
+    if (args.platform && args.platform !== "ios" && args.platform !== "android") {
+      process.stderr.write("--platform must be 'ios' or 'android'\n");
+      process.exit(2);
+    }
+    if (args.variant && args.variant !== "debug" && args.variant !== "release") {
+      process.stderr.write("--variant must be 'debug' or 'release'\n");
+      process.exit(2);
+    }
+    const r = await guard(() =>
+      callOnce({
+        op: "cache-prune",
+        ...(args.cwd ? { cwd: args.cwd } : {}),
+        ...(args.head ? { head: args.head } : {}),
+        ...(args.platform ? { platform: args.platform as "ios" | "android" } : {}),
+        ...(args.variant ? { variant: args.variant as "debug" | "release" } : {}),
+        ...(args.device ? { deviceUdid: args.device } : {}),
+        ...(args.all ? { all: true } : {}),
+        ...(args["dry-run"] ? { dryRun: true } : {}),
+      }),
+    );
+    if (r.error) {
+      process.stderr.write(`${r.error}\n`);
+      process.exit(1);
+    }
+    const payload = (r.payload ?? {}) as {
+      removed: Array<{ key: { head: string; platform: string }; deviceUdid: string }>;
+      dryRun: boolean;
+    };
+    const verb = payload.dryRun ? "Would remove" : "Removed";
+    const n = payload.removed.length;
+    process.stdout.write(`${verb} ${n} cache ${n === 1 ? "entry" : "entries"}.\n`);
+    for (const e of payload.removed) {
+      process.stdout.write(`  ${e.key.head.slice(0, 8)} ${e.key.platform} ${e.deviceUdid}\n`);
+    }
+  },
+});
+
+const cache = defineCommand({
+  meta: { name: "cache", description: "Inspect or prune the build cache" },
+  subCommands: { list: cacheList, prune: cachePrune },
+});
+
 const main = defineCommand({
   meta: { name: "maestroq", description: "maestroq CLI client", version: VERSION },
-  subCommands: { daemon, devices, submit, status, logs, cancel, run, prune, init, config },
+  subCommands: {
+    daemon,
+    devices,
+    submit,
+    status,
+    logs,
+    cancel,
+    run,
+    prune,
+    cache,
+    init,
+    config,
+  },
 });
 
 function reportUnexpected(err: unknown): never {
