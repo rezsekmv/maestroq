@@ -11,8 +11,8 @@ export const DeviceConfigSchema = z.object({
   avdName: z.string().optional(),
   // Override for `expo run:android/ios --device <…>`. Needed for physical
   // Android phones whose adb serial (e.g. `d90586bb`) doesn't match the
-  // device name Expo expects (e.g. `CPH2307`). When unset, `udid` is used,
-  // which is what simulators/emulators need.
+  // device name Expo expects (e.g. `CPH2307`). When unset, falls back to
+  // `avdName` (Android emulators), then `udid` (all platforms).
   expoDeviceName: z.string().optional(),
 });
 export type DeviceConfig = z.infer<typeof DeviceConfigSchema>;
