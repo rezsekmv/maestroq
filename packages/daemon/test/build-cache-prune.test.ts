@@ -103,4 +103,20 @@ describe("listCacheEntries / pruneCacheEntries", () => {
     expect(removed[0]?.deviceUdid).toBe("iphone-sim-x");
     expect(listCacheEntries()).toHaveLength(2);
   });
+
+  it("handles a deviceUdid that itself contains '::' (regression for lastIndexOf parsing bug)", () => {
+    // Pathological but legal — the map-key separator is '::' and an earlier
+    // implementation used lastIndexOf to extract the udid, which would
+    // truncate any udid containing the separator.
+    _resetCacheForTests();
+    const weirdDev = "adb-d90586bb-QKklZ0._adb-tls-connect._tcp::extra";
+    recordSuccessfulBuild(A, weirdDev);
+    const list = listCacheEntries();
+    expect(list).toHaveLength(1);
+    expect(list[0]?.deviceUdid).toBe(weirdDev);
+
+    const removed = pruneCacheEntries({ deviceUdid: weirdDev });
+    expect(removed).toHaveLength(1);
+    expect(listCacheEntries()).toHaveLength(0);
+  });
 });
