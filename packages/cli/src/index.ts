@@ -3,6 +3,8 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
+  CacheListResponseSchema,
+  CachePruneResponseSchema,
   CancelResponseSchema,
   DevicesResponseSchema,
   type JobStatus,
@@ -498,12 +500,7 @@ const cacheList = defineCommand({
       process.stderr.write(`${r.error}\n`);
       process.exit(1);
     }
-    const payload = (r.payload ?? {}) as {
-      entries: Array<{
-        key: { cwd: string; head: string; platform: string; variant: string; envHash: string };
-        deviceUdid: string;
-      }>;
-    };
+    const payload = parsePayload(CacheListResponseSchema, r.payload, "cache-list");
     if (args.json) {
       process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
       return;
@@ -567,10 +564,7 @@ const cachePrune = defineCommand({
       process.stderr.write(`${r.error}\n`);
       process.exit(1);
     }
-    const payload = (r.payload ?? {}) as {
-      removed: Array<{ key: { head: string; platform: string }; deviceUdid: string }>;
-      dryRun: boolean;
-    };
+    const payload = parsePayload(CachePruneResponseSchema, r.payload, "cache-prune");
     const verb = payload.dryRun ? "Would remove" : "Removed";
     const n = payload.removed.length;
     process.stdout.write(`${verb} ${n} cache ${n === 1 ? "entry" : "entries"}.\n`);

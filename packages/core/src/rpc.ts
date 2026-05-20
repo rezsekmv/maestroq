@@ -90,6 +90,30 @@ export type CancelResponse = z.infer<typeof CancelResponseSchema>;
 export const DevicesResponseSchema = z.object({ devices: z.array(WorkerInfoSchema) });
 export type DevicesResponse = z.infer<typeof DevicesResponseSchema>;
 
+const CacheKeySchema = z.object({
+  cwd: z.string(),
+  head: z.string(),
+  platform: z.enum(["ios", "android"]),
+  variant: z.enum(["debug", "release"]),
+  envHash: z.string(),
+});
+
+const CacheEntrySchema = z.object({
+  key: CacheKeySchema,
+  deviceUdid: z.string(),
+});
+
+export const CacheListResponseSchema = z.object({
+  entries: z.array(CacheEntrySchema),
+});
+export type CacheListResponse = z.infer<typeof CacheListResponseSchema>;
+
+export const CachePruneResponseSchema = z.object({
+  removed: z.array(CacheEntrySchema),
+  dryRun: z.boolean(),
+});
+export type CachePruneResponse = z.infer<typeof CachePruneResponseSchema>;
+
 export function encodeMessage(obj: unknown): string {
   return `${JSON.stringify(obj)}\n`;
 }
