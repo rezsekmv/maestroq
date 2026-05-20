@@ -12,9 +12,26 @@ export function printDevices(payload: DevicesResponse, opts: { color?: boolean }
     process.stdout.write("(no devices configured — edit ~/.maestroq/config.yaml)\n");
     return;
   }
+  const now = Date.now();
   for (const d of devices) {
-    const state = d.busy ? "busy" : "idle";
-    const painted = opts.color ? paint(state, d.busy ? "yellow" : "green") : state;
+    let state: string;
+    let color: PaintColor;
+    if (d.quarantinedUntil && d.quarantinedUntil > now) {
+      // After N consecutive `error` outcomes the dispatcher stops sending
+      // work here until cooldown. Show how long is left so users can decide
+      // whether to fix the device, wait it out, or restart the daemon.
+      const ttlSec = Math.max(1, Math.round((d.quarantinedUntil - now) / 1000));
+      const ttl = ttlSec < 60 ? `${ttlSec}s` : `${Math.round(ttlSec / 60)}m`;
+      state = `quarantined (${ttl})`;
+      color = "magenta";
+    } else if (d.busy) {
+      state = "busy";
+      color = "yellow";
+    } else {
+      state = "idle";
+      color = "green";
+    }
+    const painted = opts.color ? paint(state, color) : state;
     const labelPart = d.label ? `  ${d.label}` : "";
     process.stdout.write(`${d.platform.padEnd(8)} ${d.udid.padEnd(40)} ${painted}${labelPart}\n`);
   }

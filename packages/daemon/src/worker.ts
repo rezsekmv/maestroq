@@ -22,12 +22,25 @@ export type WorkerEvent =
   | { kind: "log"; jobId: string; line: string }
   | { kind: "idle"; deviceUdid: string };
 
+// Quarantine cool-down sequence after N consecutive `error` outcomes.
+// Doubles roughly each step, capped at 1h. Reset by any non-error terminal.
+const QUARANTINE_BACKOFF_MS = [30_000, 5 * 60_000, 30 * 60_000, 60 * 60_000];
+const QUARANTINE_THRESHOLD = 3;
+
 export class Worker extends EventEmitter {
   private busy = false;
   private cancelled = new Set<string>();
   private activePgid?: number;
   private abortController?: AbortController;
   private readonly cancelGraceMs: number;
+  // Failure-aware dispatch. After QUARANTINE_THRESHOLD consecutive `error`
+  // outcomes (boot/build/install/recovery — *not* test-level `failed`),
+  // skip this worker until `quarantinedUntil`. Resets on any non-error
+  // terminal status. Lets the dispatcher route around a flaky worker
+  // without manual config edits.
+  private consecutiveErrors = 0;
+  private quarantineLevel = 0;
+  private quarantinedUntil?: number;
 
   constructor(
     private readonly device: DeviceConfig,
@@ -83,8 +96,60 @@ export class Worker extends EventEmitter {
     return true;
   }
 
+  // True while the worker is quarantined — the dispatcher should skip it.
+  // Quarantine auto-expires when `Date.now() >= quarantinedUntil`.
+  isQuarantined(now: number = Date.now()): boolean {
+    return this.quarantinedUntil !== undefined && this.quarantinedUntil > now;
+  }
+
+  // Exposed for `maestroq devices` so users can see *why* a worker is idle.
+  getQuarantinedUntil(): number | undefined {
+    return this.isQuarantined() ? this.quarantinedUntil : undefined;
+  }
+
+  // Called by `run` once a job reaches a terminal status. Tracks consecutive
+  // `error` outcomes and arms / extends quarantine. Any other terminal
+  // resets the counter — a worker that's producing real test verdicts
+  // (`succeeded`, `failed`) or that just got a `cancelled` is healthy.
+  private recordOutcome(status: JobStatus): void {
+    if (status === "error") {
+      this.consecutiveErrors += 1;
+      if (this.consecutiveErrors >= QUARANTINE_THRESHOLD) {
+        const idx = Math.min(this.quarantineLevel, QUARANTINE_BACKOFF_MS.length - 1);
+        const backoff = QUARANTINE_BACKOFF_MS[idx] ?? 60 * 60_000;
+        this.quarantinedUntil = Date.now() + backoff;
+        this.quarantineLevel += 1;
+        logger.warn(
+          {
+            udid: this.device.udid,
+            consecutiveErrors: this.consecutiveErrors,
+            backoffMs: backoff,
+            quarantinedUntil: this.quarantinedUntil,
+          },
+          "worker: quarantined after consecutive errors",
+        );
+      }
+    } else {
+      // Any non-error terminal — including `failed` — clears the active
+      // streak: the worker is producing real test verdicts again. Keep
+      // `quarantineLevel` though — a worker that flakes, recovers for one
+      // job, then flakes again should escalate (5m → 30m → 1h), not reset
+      // to 30s every time. Level effectively persists for the daemon's
+      // lifetime; restart wipes it.
+      if (this.consecutiveErrors > 0 || this.quarantinedUntil !== undefined) {
+        logger.info(
+          { udid: this.device.udid, after: status, quarantineLevel: this.quarantineLevel },
+          "worker: error counter + active quarantine cleared (level retained)",
+        );
+      }
+      this.consecutiveErrors = 0;
+      this.quarantinedUntil = undefined;
+    }
+  }
+
   tryStart(): boolean {
     if (this.busy) return false;
+    if (this.isQuarantined()) return false;
     const next = this.queue.nextQueued(this.device.platform, this.device.udid);
     if (!next) return false;
     this.busy = true;
@@ -303,5 +368,15 @@ export class Worker extends EventEmitter {
   ): void {
     this.queue.update(jobId, { status, ...(extra ?? {}) });
     this.emit("event", { kind: "status", jobId, status, ...(extra ?? {}) } satisfies WorkerEvent);
+    // Track terminal outcomes for failure-aware dispatch. Non-terminal status
+    // updates (queued, building, …) don't influence quarantine.
+    if (
+      status === "succeeded" ||
+      status === "failed" ||
+      status === "error" ||
+      status === "cancelled"
+    ) {
+      this.recordOutcome(status);
+    }
   }
 }
