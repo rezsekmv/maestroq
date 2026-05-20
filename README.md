@@ -109,7 +109,9 @@ defaults:
 
 Spec fields always win — this only fills gaps.
 
-#### Physical iOS devices (capability gap)
+#### Physical iOS devices (experimental — known limitations)
+
+> **Status:** Experimental. Physical-device dispatch has reached "boots and launches a job" in maintainer testing, but end-to-end runs are not reliably reproducible right now — the maintainer's own attempts have failed at one of the steps below on most tries. The simulator path is the supported one for v0.1; treat physical-device support as best-effort and expect to debug Apple-side signing/provisioning state yourself.
 
 Maestroq is built around iOS **simulators**. A physical iPhone/iPad does run, but only after working around four Apple-side constraints in order — none of them are bugs maestroq can fix on its own:
 
