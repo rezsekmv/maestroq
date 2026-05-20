@@ -44,7 +44,12 @@ export const JobStatusSchema = z.enum([
   "running",
   "tearing-down",
   "succeeded",
+  // Tests ran to completion but one or more flows failed.
+  // `flowsFailed` / `flowsTotal` give the count.
   "failed",
+  // Setup / infrastructure problem — boot, build, install, or daemon
+  // crash recovery — distinct from "tests ran and failed."
+  "error",
   "cancelled",
 ]);
 export type JobStatus = z.infer<typeof JobStatusSchema>;
@@ -52,6 +57,7 @@ export type JobStatus = z.infer<typeof JobStatusSchema>;
 export const TerminalStatuses: ReadonlySet<JobStatus> = new Set([
   "succeeded",
   "failed",
+  "error",
   "cancelled",
 ]);
 
@@ -76,5 +82,9 @@ export const JobRecordSchema = z.object({
   exitCode: z.number().optional(),
   logPath: z.string().optional(),
   artifactDir: z.string().optional(),
+  // Flow counts parsed from the maestro/maestro-runner TOTAL line.
+  // Present whenever the run reached the test phase, regardless of pass/fail.
+  flowsTotal: z.number().int().nonnegative().optional(),
+  flowsFailed: z.number().int().nonnegative().optional(),
 });
 export type JobRecord = z.infer<typeof JobRecordSchema>;

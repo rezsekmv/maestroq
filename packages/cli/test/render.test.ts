@@ -1,6 +1,8 @@
-import { type JobRecord, JobSpecSchema } from "@maestroq/core";
+import { type EnrichedJobRecord, JobSpecSchema } from "@maestroq/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { printJobs } from "../src/render.js";
+
+type JobRecord = EnrichedJobRecord;
 
 let writeSpy: ReturnType<typeof vi.spyOn>;
 let output: string;
@@ -59,13 +61,66 @@ describe("printJobs short (default)", () => {
 });
 
 describe("printJobs long (-l/--long)", () => {
-  it("includes WORKTREE, CREATED, STARTED, EXIT", () => {
+  it("includes WORKTREE, CREATED, STARTED, EXIT, DEVICE, LABEL", () => {
     printJobs({ jobs: [job()] }, { header: true, long: true });
     const lines = output.trimEnd().split("\n");
     expect(lines[0]).toMatch(
-      /^ID\s+WORKTREE\s+PLAT\s+STATUS\s+CREATED\s+STARTED\s+DUR\s+EXIT\s+LABEL$/,
+      /^ID\s+WORKTREE\s+PLAT\s+STATUS\s+CREATED\s+STARTED\s+DUR\s+EXIT\s+DEVICE\s+LABEL$/,
     );
+    // No device assigned yet (queued), so DEVICE column is empty padding.
     expect(lines[1]).toMatch(/^11111111\s+x\s+ios\s+queued\s+\d+s\s+-\s+-\s+-\s+smoke iOS$/);
+  });
+
+  it("renders deviceLabel in long view, falling back to udid if no label set", () => {
+    printJobs(
+      {
+        jobs: [
+          job({ id: "1aaaaaaa", deviceUdid: "emulator-5554", deviceLabel: "Android emulator" }),
+          job({ id: "2bbbbbbb", deviceUdid: "raw-udid-only" }),
+        ],
+      },
+      { long: true },
+    );
+    expect(output).toContain("Android emulator");
+    expect(output).toContain("raw-udid-only");
+  });
+
+  it("renders failed status with flow-count when flowsTotal is set", () => {
+    printJobs(
+      {
+        jobs: [
+          job({
+            id: "3ccccccc",
+            status: "failed",
+            startedAt: now - 30_000,
+            finishedAt: now - 5_000,
+            exitCode: 1,
+            flowsTotal: 30,
+            flowsFailed: 1,
+          }),
+        ],
+      },
+      { long: true },
+    );
+    expect(output).toContain("failed 1/30");
+  });
+
+  it("renders bare 'error' status (no flow count attached)", () => {
+    printJobs(
+      {
+        jobs: [
+          job({
+            id: "4ddddddd",
+            status: "error",
+            startedAt: now - 5_000,
+            finishedAt: now - 4_000,
+            failureReason: "[boot] simctl bootstatus timed out",
+          }),
+        ],
+      },
+      { long: true },
+    );
+    expect(output).toMatch(/\berror\b/);
   });
 
   it("shows running duration for an in-flight job", () => {

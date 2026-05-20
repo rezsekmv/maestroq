@@ -58,7 +58,7 @@ describe("sweepStaleProcessGroups", () => {
     expect(result.killed).toContain(child.pid);
 
     await child.wait();
-    expect(q.get(job.id)?.status).toBe("failed");
+    expect(q.get(job.id)?.status).toBe("error");
     expect(q.get(job.id)?.failureReason).toBe("daemon-crash");
   });
 
@@ -79,7 +79,7 @@ describe("sweepStaleProcessGroups", () => {
     q.update(job.id, { status: "running", pgid: 999999 });
 
     expect(() => sweepStaleProcessGroups(q)).not.toThrow();
-    expect(q.get(job.id)?.status).toBe("failed");
+    expect(q.get(job.id)?.status).toBe("error");
   });
 
   it("does not signal a pgid that matches the current process pid", () => {
@@ -90,6 +90,6 @@ describe("sweepStaleProcessGroups", () => {
 
     const result = sweepStaleProcessGroups(q);
     expect(result.killed).not.toContain(process.pid);
-    expect(q.get(job.id)?.status).toBe("failed");
+    expect(q.get(job.id)?.status).toBe("error");
   });
 });

@@ -3,6 +3,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import { dirname } from "node:path";
 import {
   encodeMessage,
+  type JobRecord,
   MAESTROQ_HOME,
   PID_PATH,
   type RpcEvent,
@@ -177,9 +178,15 @@ async function dispatchRequest(
     }
 
     case "status": {
-      const data = req.jobId
+      const annotate = (j: JobRecord): JobRecord & { deviceLabel?: string } => {
+        if (!j.deviceUdid) return j;
+        const label = opts.dispatcher.getDeviceLabel(j.deviceUdid);
+        return label ? { ...j, deviceLabel: label } : j;
+      };
+      const raw = req.jobId
         ? opts.queue.get(req.jobId)
         : opts.queue.all().sort((a, b) => a.createdAt - b.createdAt);
+      const data = Array.isArray(raw) ? raw.map(annotate) : raw ? annotate(raw) : raw;
       send(client.socket, { kind: "ok", payload: { jobs: data } });
       send(client.socket, { kind: "end" });
       return;

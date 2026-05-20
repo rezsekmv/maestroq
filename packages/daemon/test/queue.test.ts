@@ -75,13 +75,15 @@ describe("JobQueue", () => {
 
     const interrupted = q.finalizeInterrupted("daemon-crash");
     expect(interrupted.map((j) => j.id)).toEqual([a.id]);
-    expect(q.get(a.id)?.status).toBe("failed");
+    // finalizeInterrupted now marks interrupted jobs as `error` (setup-side
+    // problem — daemon-crash recovery never reached a test verdict).
+    expect(q.get(a.id)?.status).toBe("error");
     expect(q.get(a.id)?.failureReason).toBe("daemon-crash");
     expect(q.get(b.id)?.status).toBe("queued");
 
     const persisted = JSON.parse(readFileSync(path, "utf8")) as {
       jobs: Array<{ id: string; status: string }>;
     };
-    expect(persisted.jobs.find((j) => j.id === a.id)?.status).toBe("failed");
+    expect(persisted.jobs.find((j) => j.id === a.id)?.status).toBe("error");
   });
 });

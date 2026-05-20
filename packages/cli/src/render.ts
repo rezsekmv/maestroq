@@ -1,5 +1,10 @@
-import type { DevicesResponse, JobRecord, RpcEvent, StatusResponse } from "@maestroq/core";
+import type { DevicesResponse, EnrichedJobRecord, RpcEvent, StatusResponse } from "@maestroq/core";
 import { colorExit, colorStatus, type PaintColor, paint } from "./color.js";
+
+// Status table renders jobs as the server gave them, which always includes
+// the `deviceLabel` enrichment. JobRecord is the persisted subset; use
+// EnrichedJobRecord here so the column callbacks can read `deviceLabel`.
+type JobRecord = EnrichedJobRecord;
 
 export function printDevices(payload: DevicesResponse, opts: { color?: boolean } = {}): void {
   const { devices } = payload;
@@ -40,7 +45,15 @@ const PLAT_COL: Column = { name: "PLAT", width: 7, value: (j) => j.spec.platform
 const STATUS_COL: Column = {
   name: "STATUS",
   width: 14,
-  value: (j) => j.status,
+  // Render `failed (X/Y)` when the maestro phase emitted a TOTAL line, so
+  // the user can tell "1 flow out of 30 failed" from "everything failed".
+  // `error` and other statuses render as the bare status word.
+  value: (j) => {
+    if (j.status === "failed" && j.flowsTotal !== undefined) {
+      return `failed ${j.flowsFailed ?? "?"}/${j.flowsTotal}`;
+    }
+    return j.status;
+  },
   paint: (j) => colorStatus(j.status),
 };
 const CREATED_COL: Column = {
@@ -68,6 +81,15 @@ const EXIT_COL: Column = {
   value: (j) => (j.exitCode != null ? String(j.exitCode) : "-"),
   paint: (j) => colorExit(j.exitCode),
 };
+const DEVICE_COL: Column = {
+  name: "DEVICE",
+  width: 18,
+  // Prefer the human-readable config label; fall back to the (truncated) udid.
+  value: (j) => {
+    const text = j.deviceLabel ?? j.deviceUdid ?? "";
+    return truncate(text, 18);
+  },
+};
 const LABEL_COL: Column = {
   name: "LABEL",
   width: 0,
@@ -84,6 +106,7 @@ const LONG_COLUMNS: Column[] = [
   STARTED_COL,
   DUR_COL,
   EXIT_COL,
+  DEVICE_COL,
   LABEL_COL,
 ];
 
