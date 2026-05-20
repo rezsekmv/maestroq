@@ -19,7 +19,12 @@ export interface CacheDecision {
   key?: CacheKey;
 }
 
-const lastBuilds = new Map<string, CacheKey>();
+interface StoredEntry {
+  key: CacheKey;
+  deviceUdid: string;
+}
+
+const lastBuilds = new Map<string, StoredEntry>();
 let cachePath: string = BUILD_CACHE_PATH;
 
 export function loadPersistedCache(path: string = BUILD_CACHE_PATH): void {
@@ -30,10 +35,15 @@ export function loadPersistedCache(path: string = BUILD_CACHE_PATH): void {
     if (!Array.isArray(parsed)) throw new Error("cache file is not an array");
     lastBuilds.clear();
     for (const entry of parsed) {
-      if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string") {
+      if (
+        !Array.isArray(entry) ||
+        entry.length !== 2 ||
+        typeof entry[0] !== "string" ||
+        typeof (entry[1] as StoredEntry)?.deviceUdid !== "string"
+      ) {
         throw new Error("invalid cache entry format");
       }
-      lastBuilds.set(entry[0] as string, entry[1] as CacheKey);
+      lastBuilds.set(entry[0] as string, entry[1] as StoredEntry);
     }
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
@@ -94,7 +104,8 @@ export async function decideCache(
   const head = await gitHead(spec.cwd);
   const envHash = hashEnv(spec.env);
   const key: CacheKey = { cwd: spec.cwd, head, platform: spec.platform, variant, envHash };
-  const prior = lastBuilds.get(`${keyId(key)}::${deviceKey}`);
+  const stored = lastBuilds.get(`${keyId(key)}::${deviceKey}`);
+  const prior = stored?.key;
   if (!prior) return { use: false, reason: "no-prior-build", key };
   if (prior.head === key.head && prior.envHash === key.envHash && prior.variant === key.variant) {
     return { use: true, reason: "clean-hit", key };
@@ -103,25 +114,17 @@ export async function decideCache(
 }
 
 export function recordSuccessfulBuild(key: CacheKey, deviceKey: string): void {
-  lastBuilds.set(`${keyId(key)}::${deviceKey}`, key);
+  lastBuilds.set(`${keyId(key)}::${deviceKey}`, { key, deviceUdid: deviceKey });
   persistCache();
 }
 
 export interface CacheEntry {
   key: CacheKey;
-  // The device UDID this entry was recorded against. Stored as the trailing
-  // segment of the in-memory map key (`<cwd>::<platform>::<variant>::<udid>`).
   deviceUdid: string;
 }
 
 export function listCacheEntries(): CacheEntry[] {
-  const out: CacheEntry[] = [];
-  for (const [mapKey, key] of lastBuilds.entries()) {
-    const lastSep = mapKey.lastIndexOf("::");
-    const deviceUdid = lastSep >= 0 ? mapKey.slice(lastSep + 2) : "";
-    out.push({ key, deviceUdid });
-  }
-  return out;
+  return Array.from(lastBuilds.values()).map(({ key, deviceUdid }) => ({ key, deviceUdid }));
 }
 
 export interface PruneFilter {
@@ -140,9 +143,7 @@ export function pruneCacheEntries(
   opts: { all?: boolean; dryRun?: boolean } = {},
 ): CacheEntry[] {
   const matched: CacheEntry[] = [];
-  for (const [mapKey, key] of lastBuilds.entries()) {
-    const lastSep = mapKey.lastIndexOf("::");
-    const deviceUdid = lastSep >= 0 ? mapKey.slice(lastSep + 2) : "";
+  for (const { key, deviceUdid } of lastBuilds.values()) {
     if (!opts.all) {
       const filterEmpty =
         filter.cwd === undefined &&
