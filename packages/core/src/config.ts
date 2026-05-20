@@ -13,7 +13,7 @@ export const DeviceConfigSchema = z.object({
   // Android phones whose adb serial (e.g. `d90586bb`) doesn't match the
   // device name Expo expects (e.g. `CPH2307`). When unset, falls back to
   // `avdName` (Android emulators), then `udid` (all platforms).
-  expoDeviceName: z.string().optional(),
+  expoDeviceName: z.string().min(1).optional(),
 });
 export type DeviceConfig = z.infer<typeof DeviceConfigSchema>;
 
