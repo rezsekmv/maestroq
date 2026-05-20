@@ -178,7 +178,12 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
     // then check PM is responsive — same rationale as the get-state path.
     await execa(
       "adb",
-      ["-s", device.udid, "shell", "while [ \"$(getprop sys.boot_completed)\" != 1 ]; do sleep 1; done"],
+      [
+        "-s",
+        device.udid,
+        "shell",
+        'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done',
+      ],
       { timeout: bootstatusTimeoutMs, killSignal: "SIGKILL", reject: false },
     );
     await assertPackageManagerHealthy(device.udid, logSink);
