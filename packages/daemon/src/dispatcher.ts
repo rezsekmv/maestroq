@@ -36,9 +36,9 @@ export class Dispatcher extends EventEmitter {
     }
     for (const d of devices) {
       if (d.platform === "ios" && d.headless) {
-        logger.warn(
+        logger.info(
           { udid: d.udid },
-          "headless: true is a no-op on iOS; the daemon does not control Simulator.app — quit it manually (`osascript -e 'quit app \"Simulator\"'`) to run headlessly",
+          "headless: true on iOS — the daemon quits Simulator.app before each boot so no UI window attaches",
         );
       }
     }

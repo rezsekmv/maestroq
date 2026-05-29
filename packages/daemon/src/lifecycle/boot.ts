@@ -70,6 +70,30 @@ export function _resetIosSimCacheForTests(): void {
   iosSimCache.clear();
 }
 
+// For headless iOS the daemon must own the simulator lifecycle. A user- (or
+// previous-run-) launched `Simulator.app` attaches a UI window to every booted
+// sim and contends with the run, so when `headless: true` we quit the app
+// before booting. `simctl bootstatus -b` re-boots the target afterwards.
+async function quitSimulatorApp(logSink: (line: string) => void): Promise<void> {
+  const running = await execa("pgrep", ["-x", "Simulator"], { reject: false });
+  if (running.exitCode !== 0) return;
+  logSink("[boot] Simulator.app was running; quitting it before headless boot");
+  const quit = await execa("osascript", ["-e", 'tell application "Simulator" to quit'], {
+    reject: false,
+    timeout: 10_000,
+  });
+  if (quit.exitCode !== 0) {
+    await execa("killall", ["Simulator"], { reject: false });
+  }
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const still = await execa("pgrep", ["-x", "Simulator"], { reject: false });
+    if (still.exitCode !== 0) return;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  logSink("[boot] Simulator.app still present after quit; continuing anyway");
+}
+
 export async function bootDevice(opts: BootOptions): Promise<void> {
   const { device, rebootSimBefore, logSink } = opts;
   const bootstatusTimeoutMs = opts.bootstatusTimeoutMs ?? DEFAULT_BOOTSTATUS_TIMEOUT_MS;
@@ -122,6 +146,10 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
         rmSync(jsonDir, { recursive: true, force: true });
       }
       return;
+    }
+
+    if (device.headless) {
+      await quitSimulatorApp(logSink);
     }
 
     if (rebootSimBefore) {
