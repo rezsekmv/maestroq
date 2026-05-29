@@ -175,7 +175,7 @@ Per-project specs and per-project config live under `.maestro/` at the project r
 
 ### Headless devices
 
-Per-device `headless: true` in `~/.maestroq/config.yaml`. On Android, the daemon appends `-no-window -no-audio -no-boot-anim` to the `emulator -avd` spawn — only effective when the daemon actually cold-boots the emulator (`adb get-state` reports it unreachable). On iOS the flag is declarative: `simctl boot` is already headless, but `Simulator.app` (if running) attaches a window to every booted sim and the daemon does not control it. The dispatcher logs a one-shot `WARN` if `headless: true` is set on an iOS device, pointing the user at `osascript -e 'quit app "Simulator"'`.
+Per-device `headless: true` in `~/.maestroq/config.yaml`. On Android, the daemon appends `-no-window -no-audio -no-boot-anim` to the `emulator -avd` spawn — only effective when the daemon actually cold-boots the emulator (`adb get-state` reports it unreachable). It also appends `-gpu <mode>`: `-no-window` otherwise silently selects software rendering (`swiftshader_indirect`) regardless of the AVD's `hw.gpu.mode`, which starves GPU-heavy RN apps and makes Maestro's first `tapOn` miss its deadline. The mode is `devices[].gpu` (default `host`, with a one-time fallback to `swiftshader_indirect` if the host boot fails; pinning a value disables the fallback). The host/fallback logic lives in `coldBootEmulator` in `lifecycle/boot.ts`. On iOS the flag is declarative: `simctl boot` is already headless, but `Simulator.app` (if running) attaches a window to every booted sim and the daemon does not control it. The dispatcher logs a one-shot `WARN` if `headless: true` is set on an iOS device, pointing the user at `osascript -e 'quit app "Simulator"'`.
 
 ### Commits
 

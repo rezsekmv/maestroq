@@ -154,10 +154,61 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
   }
 
   const avd = device.avdName ?? device.udid;
+
+  // Headless `-no-window` makes the emulator silently fall back to software
+  // rendering (swiftshader_indirect) regardless of the AVD's hw.gpu.mode. That
+  // starves GPU-heavy RN/Flutter apps and makes Maestro's first `tapOn` miss
+  // its deadline ("app launched but the first frame isn't ready"). Force host
+  // GPU for headless boots; if that boot fails (older drivers / no working
+  // OpenGL stack) retry once with swiftshader_indirect — unless the user
+  // pinned a mode via `gpu:`, in which case we honor it and don't fall back.
+  const pinned = device.gpu;
+  const firstGpu = device.headless ? (pinned ?? "host") : undefined;
+
+  try {
+    await coldBootEmulator({ device, avd, gpuMode: firstGpu, bootstatusTimeoutMs, logSink });
+  } catch (err) {
+    const canFallback = device.headless && pinned === undefined && firstGpu === "host";
+    if (!canFallback) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `[boot] adb wait-for-device timed out or failed for AVD "${avd}" (udid ${device.udid}): ${message}`,
+      );
+    }
+    logSink("[boot] host-GPU boot failed; retrying with -gpu swiftshader_indirect");
+    try {
+      await coldBootEmulator({
+        device,
+        avd,
+        gpuMode: "swiftshader_indirect",
+        bootstatusTimeoutMs,
+        logSink,
+      });
+    } catch (err2) {
+      const message = err2 instanceof Error ? err2.message : String(err2);
+      throw new Error(
+        `[boot] adb wait-for-device timed out or failed for AVD "${avd}" (udid ${device.udid}) ` +
+          `after host + swiftshader_indirect GPU attempts: ${message}`,
+      );
+    }
+  }
+}
+
+interface ColdBootOptions {
+  device: DeviceConfig;
+  avd: string;
+  gpuMode: "host" | "swiftshader_indirect" | "auto" | undefined;
+  bootstatusTimeoutMs: number;
+  logSink: (line: string) => void;
+}
+
+async function coldBootEmulator(opts: ColdBootOptions): Promise<void> {
+  const { device, avd, gpuMode, bootstatusTimeoutMs, logSink } = opts;
   const emulatorArgs = ["-avd", avd, "-no-snapshot-load"];
   if (device.headless) {
     emulatorArgs.push("-no-window", "-no-audio", "-no-boot-anim");
   }
+  if (gpuMode) emulatorArgs.push("-gpu", gpuMode);
   logSink(`[boot] emulator ${emulatorArgs.join(" ")}`);
   // emulator runs in background; we just wait for adb to see the device.
   // Spawn detached, don't await, then poll adb wait-for-device.
@@ -192,9 +243,15 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
     );
     await assertPackageManagerHealthy(device.udid, logSink);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `[boot] adb wait-for-device timed out or failed for AVD "${avd}" (udid ${device.udid}): ${message}`,
-    );
+    // Kill the half-booted emulator's process group so a fallback attempt
+    // gets a clean slate (it would otherwise hold the AVD lock / serial).
+    if (child.pid) {
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        // already gone
+      }
+    }
+    throw err;
   }
 }
