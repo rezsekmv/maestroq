@@ -1,6 +1,6 @@
 # Running `maestroq` as a service
 
-v0.1 ships only `maestroq daemon start` (foreground). To keep the daemon up across logins, install it as a service yourself.
+`maestroq daemon start` backgrounds itself by default (logs to `~/.maestroq/daemon.log`). That's enough for ad-hoc use, but it does not survive a logout/reboot. To keep the daemon up across logins, install it as a service with the `--foreground` flag (so the service manager owns the process lifecycle instead of the daemon detaching out from under it).
 
 ## macOS — launchd
 
@@ -18,6 +18,7 @@ Save as `~/Library/LaunchAgents/dev.maestroq.daemon.plist`:
     <string>/usr/local/bin/maestroq</string>
     <string>daemon</string>
     <string>start</string>
+    <string>--foreground</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -50,7 +51,7 @@ Description=maestroq daemon
 After=default.target
 
 [Service]
-ExecStart=%h/.npm-global/bin/maestroq daemon start
+ExecStart=%h/.npm-global/bin/maestroq daemon start --foreground
 Restart=on-failure
 RestartSec=5
 

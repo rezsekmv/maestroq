@@ -32,8 +32,10 @@ npm i -g maestroq
 Start the daemon (or install it as a service — see [`docs/launchd.md`](docs/launchd.md)):
 
 ```bash
-maestroq daemon start &
+maestroq daemon start
 ```
+
+`daemon start` backgrounds itself by default — it forks, redirects output to `~/.maestroq/daemon.log`, and returns once the daemon is listening, so `maestroq daemon start && maestroq submit …` works as a one-shot. Pass `--foreground` / `-f` to run it blocking in the current shell (for launchd/systemd wrappers or debugging).
 
 ### Configure
 
@@ -41,7 +43,7 @@ Boot the simulator and emulator you want maestroq to own, then:
 
 ```bash
 maestroq init                               # auto-discovers booted devices + scaffolds starter specs
-maestroq daemon stop && maestroq daemon start &   # reload daemon with the new config
+maestroq daemon stop && maestroq daemon start   # reload daemon with the new config
 ```
 
 `maestroq init`:

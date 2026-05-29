@@ -39,7 +39,8 @@ npm run build                # build all dist/
 
 # manual / live testing
 npm link -w packages/cli     # puts `maestroq` on PATH (uses dist/index.js)
-maestroq daemon start &            # foreground daemon (logs to stdout/pino)
+maestroq daemon start              # backgrounds by default; logs to ~/.maestroq/daemon.log
+                                   # (add --foreground / -f to run blocking, e.g. under launchd)
 maestroq devices                   # confirms config + workers
 maestroq run path/to/spec.yaml     # blocks, streams logs, exits with job code
 maestroq daemon stop
@@ -214,10 +215,9 @@ We have no real-device CI (Mac runners are paid). The recipe for verifying a cha
 # 1. Build, link, ensure maestroq is on PATH.
 npm run build && npm link -w packages/cli
 
-# 2. Start daemon fresh.
+# 2. Start daemon fresh (backgrounds by default; logs to ~/.maestroq/daemon.log).
 rm -rf ~/.maestroq ~/.local/share/maestroq
-maestroq daemon start > /tmp/maestroq-daemon.log 2>&1 &
-sleep 1 && maestroq daemon status
+maestroq daemon start && maestroq daemon status
 
 # 3. Seed config with real UDIDs from already-booted sims/emulators.
 xcrun simctl list devices booted    # grab the iOS UDID
@@ -225,7 +225,7 @@ adb devices                          # grab the Android emulator id
 $EDITOR ~/.maestroq/config.yaml
 
 # 4. Restart so daemon picks up config.
-maestroq daemon stop && sleep 1 && maestroq daemon start > /tmp/maestroq-daemon.log 2>&1 &
+maestroq daemon stop && maestroq daemon start
 maestroq devices
 
 # 5. Submit specs from a real worktree.
