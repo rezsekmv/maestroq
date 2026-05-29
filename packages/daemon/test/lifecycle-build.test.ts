@@ -22,7 +22,10 @@ afterEach(() => {
 
 function installFakeNpx(body: string): void {
   const path = join(dir, "npx");
-  writeFileSync(path, `#!/bin/sh\nprintf '%s\\n' "$@" > "${argsFile}"\n${body}\n`);
+  writeFileSync(
+    path,
+    `#!/bin/sh\nprintf '%s\\n' "$@" > "${argsFile}"\nprintf '%s' "$METRO_CACHE_ROOT" > "${join(dir, "metro_cache_root.txt")}"\n${body}\n`,
+  );
   chmodSync(path, 0o755);
   process.env.PATH = `${dir}:${process.env.PATH ?? ""}`;
 }
@@ -121,5 +124,44 @@ exit 0
       "release",
       "--no-bundler",
     ]);
+  });
+
+  it("sets a per-device METRO_CACHE_ROOT so parallel builds don't race on the shared cache", async () => {
+    installFakeNpx(`exit 0`);
+    const spec = JobSpecSchema.parse({
+      cwd: dir,
+      flows: ["a.yaml"],
+      platform: "ios",
+      build: { variant: "debug", cache: false },
+    });
+    await buildApp({
+      spec,
+      device: { udid: "AB/CD 12", platform: "ios" },
+      variant: "debug",
+      logSink: () => undefined,
+      onChildStart: () => undefined,
+    });
+    const root = readFileSync(join(dir, "metro_cache_root.txt"), "utf8");
+    expect(root).toMatch(/metro-cache[/\\]AB_CD_12$/);
+  });
+
+  it("respects a caller-provided METRO_CACHE_ROOT (spec.env wins)", async () => {
+    installFakeNpx(`exit 0`);
+    const spec = JobSpecSchema.parse({
+      cwd: dir,
+      flows: ["a.yaml"],
+      platform: "ios",
+      build: { variant: "debug", cache: false },
+      env: { METRO_CACHE_ROOT: "/tmp/pinned-cache" },
+    });
+    await buildApp({
+      spec,
+      device: { udid: "fake-udid", platform: "ios" },
+      variant: "debug",
+      logSink: () => undefined,
+      onChildStart: () => undefined,
+    });
+    const root = readFileSync(join(dir, "metro_cache_root.txt"), "utf8");
+    expect(root).toBe("/tmp/pinned-cache");
   });
 });

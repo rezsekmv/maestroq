@@ -1,6 +1,7 @@
 import type { JobSpec } from "@maestroq/core";
 import { execa, type ResultPromise } from "execa";
 import type { MetroLease, MetroPortPool } from "../metro-pool.js";
+import { withMetroCacheRoot } from "./metro-cache.js";
 
 export interface MetroHandle {
   lease: MetroLease;
@@ -48,9 +49,14 @@ export async function startMetro(opts: StartMetroOptions): Promise<MetroHandle> 
 
   const args = ["expo", "start", "--port", String(lease.port), "--dev-client"];
   logSink(`[metro] npx ${args.join(" ")}`);
+  const env = withMetroCacheRoot(
+    { ...process.env, ...spec.env },
+    `metro-${lease.port}`,
+    logSink,
+  );
   const child = execa("npx", args, {
     cwd: spec.cwd,
-    env: { ...process.env, ...spec.env },
+    env,
     all: true,
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],

@@ -1,5 +1,6 @@
 import type { DeviceConfig, JobSpec, Variant } from "@maestroq/core";
 import { execa, type ResultPromise } from "execa";
+import { withMetroCacheRoot } from "./metro-cache.js";
 
 export interface BuildOptions {
   spec: JobSpec;
@@ -15,7 +16,6 @@ function flag(variant: Variant): string {
 
 export async function buildApp(opts: BuildOptions): Promise<void> {
   const { spec, device, variant, logSink, onChildStart } = opts;
-  const env = { ...process.env, ...spec.env };
 
   // `expo run:{ios,android} --device <…>` requires the *name* Expo recognises,
   // which differs from the adb serial / simctl UDID maestroq uses internally.
@@ -35,6 +35,7 @@ export async function buildApp(opts: BuildOptions): Promise<void> {
   if (variant === "release") args.push("--no-bundler");
   logSink(`[build] npx ${args.join(" ")}`);
 
+  const env = withMetroCacheRoot({ ...process.env, ...spec.env }, device.udid, logSink);
   const child: ResultPromise = execa("npx", args, {
     cwd: spec.cwd,
     env,
