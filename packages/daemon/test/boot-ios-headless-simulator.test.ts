@@ -24,7 +24,10 @@ beforeEach(() => {
   // pgrep -x Simulator: "running" until osascript drops the quit marker.
   installFakeBin("pgrep", `if [ -f "${dir}/quit.marker" ]; then exit 1; else exit 0; fi`);
   // osascript quit: record the call and mark Simulator as gone.
-  installFakeBin("osascript", `printf 'quit\\n' >> "${dir}/osascript.calls"\ntouch "${dir}/quit.marker"\nexit 0`);
+  installFakeBin(
+    "osascript",
+    `printf 'quit\\n' >> "${dir}/osascript.calls"\ntouch "${dir}/quit.marker"\nexit 0`,
+  );
   installFakeBin("killall", `printf 'killall\\n' >> "${dir}/killall.calls"\nexit 0`);
 });
 
