@@ -49,11 +49,7 @@ export async function startMetro(opts: StartMetroOptions): Promise<MetroHandle> 
 
   const args = ["expo", "start", "--port", String(lease.port), "--dev-client"];
   logSink(`[metro] npx ${args.join(" ")}`);
-  const env = withMetroCacheRoot(
-    { ...process.env, ...spec.env },
-    `metro-${lease.port}`,
-    logSink,
-  );
+  const env = withMetroCacheRoot({ ...process.env, ...spec.env }, `metro-${lease.port}`, logSink);
   const child = execa("npx", args, {
     cwd: spec.cwd,
     env,
