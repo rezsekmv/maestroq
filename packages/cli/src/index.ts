@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
   CacheListResponseSchema,
   CachePruneResponseSchema,
   CancelResponseSchema,
+  DAEMON_LOG_PATH,
   DevicesResponseSchema,
   type JobStatus,
+  MAESTROQ_HOME,
   PID_PATH,
   SOCKET_PATH,
   StatusResponseSchema,
@@ -71,14 +73,73 @@ async function confirm(message: string): Promise<boolean> {
   });
 }
 
+async function daemonResponds(): Promise<boolean> {
+  if (!existsSync(SOCKET_PATH)) return false;
+  const r = await callOnce({ op: "ping" }).catch(() => null);
+  return r !== null && !r.error;
+}
+
 const daemonStart = defineCommand({
-  meta: { name: "start", description: "Start the maestroq daemon in the foreground" },
+  meta: { name: "start", description: "Start the maestroq daemon (backgrounds by default)" },
   args: {
     config: { type: "string", description: "Path to config.yaml", required: false },
+    foreground: {
+      type: "boolean",
+      alias: "f",
+      description: "Run blocking in the foreground (for launchd/systemd wrappers or debugging)",
+    },
   },
   async run({ args }) {
-    const { startDaemon } = await import("@maestroq/daemon");
-    await startDaemon({ configPath: args.config });
+    if (args.foreground) {
+      const { startDaemon } = await import("@maestroq/daemon");
+      await startDaemon({ configPath: args.config });
+      return;
+    }
+
+    // Default: detach a `--foreground` child, send its output to the daemon log,
+    // and return as soon as the socket is accepting connections. Keeps
+    // `maestroq daemon start && maestroq submit …` a one-shot for agents.
+    if (await daemonResponds()) {
+      const pid = existsSync(PID_PATH) ? readFileSync(PID_PATH, "utf8").trim() : "?";
+      process.stdout.write(`daemon already running (pid ${pid})\n`);
+      return;
+    }
+
+    mkdirSync(MAESTROQ_HOME, { recursive: true });
+    const logFd = openSync(DAEMON_LOG_PATH, "a");
+    const childArgs = [process.argv[1] as string, "daemon", "start", "--foreground"];
+    if (args.config) childArgs.push("--config", args.config);
+    const child = spawn(process.execPath, childArgs, {
+      detached: true,
+      stdio: ["ignore", logFd, logFd],
+    });
+    child.unref();
+    closeSync(logFd);
+
+    let earlyExit: number | null = null;
+    child.on("exit", (code) => {
+      earlyExit = code ?? 1;
+    });
+
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      if (earlyExit !== null) {
+        process.stderr.write(
+          `daemon exited during startup (code ${earlyExit}); see ${DAEMON_LOG_PATH}\n`,
+        );
+        process.exit(1);
+      }
+      if (existsSync(SOCKET_PATH)) {
+        const pid = existsSync(PID_PATH)
+          ? readFileSync(PID_PATH, "utf8").trim()
+          : String(child.pid ?? "?");
+        process.stdout.write(`maestroq daemon started (pid ${pid}, logs: ${DAEMON_LOG_PATH})\n`);
+        return;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    }
+    process.stderr.write(`daemon did not start listening within 10s; see ${DAEMON_LOG_PATH}\n`);
+    process.exit(1);
   },
 });
 
