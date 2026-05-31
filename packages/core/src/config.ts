@@ -21,10 +21,11 @@ export const DeviceConfigSchema = z.object({
   // warning if this is set on an iOS device.
   headless: z.boolean().default(false),
   // Android only. GPU mode for a headless cold-boot's `emulator -gpu <mode>`.
-  // Unset → `host` (with an automatic one-time fallback to
-  // `swiftshader_indirect` if the host-GPU boot fails). Pin a value to
-  // disable the fallback. `-no-window` otherwise silently selects software
-  // rendering, which makes GPU-heavy RN apps miss Maestro's first-tap deadline.
+  // Unset → `swiftshader_indirect`. On Apple Silicon `-gpu host` translates
+  // GL→Metal and a GPU-heavy RN app's first-frame render starves SystemUI →
+  // a "System UI isn't responding" ANR that blocks every tap. Software
+  // rendering avoids it. Set `host` only on hosts with a real GL stack
+  // (x86 Linux) where it's both stable and faster.
   gpu: z.enum(["host", "swiftshader_indirect", "auto"]).optional(),
 });
 export type DeviceConfig = z.infer<typeof DeviceConfigSchema>;
