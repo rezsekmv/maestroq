@@ -1,6 +1,6 @@
 {
   "name": "@maestroq/daemon",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rezsekmv/maestroq.git",
@@ -26,7 +26,7 @@
     "dist"
   ],
   "dependencies": {
-    "@maestroq/core": "^0.4.0",
+    "@maestroq/core": "^0.4.1",
     "execa": "^9.6.1",
     "pino": "^9.14.0",
     "proper-lockfile": "^4.1.2",
