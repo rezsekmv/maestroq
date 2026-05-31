@@ -97,4 +97,28 @@ describe("bootDevice Android headless GPU fallback", () => {
     const attempts = await waitForLines(1, 3_000);
     expect(attempts).toEqual(["host"]);
   });
+
+  it("does not fall back when emulator exits immediately (bad avdName / misconfig)", async () => {
+    // Override emulator to exit immediately with code 1 — simulates a bad AVD name.
+    installFakeBin(
+      "emulator",
+      `gpu=""\nwhile [ "$#" -gt 0 ]; do if [ "$1" = "-gpu" ]; then gpu="$2"; fi; shift; done\nprintf '%s\\n' "$gpu" >> "${emulatorLog}"\nexit 1`,
+    );
+    await expect(
+      bootDevice({
+        device: {
+          udid: "emulator-5554",
+          platform: "android",
+          avdName: "NoSuchAVD",
+          headless: true,
+        },
+        rebootSimBefore: false,
+        logSink: () => undefined,
+        bootstatusTimeoutMs: 5_000,
+      }),
+    ).rejects.toThrow(/exited immediately/);
+    // Only one emulator launch — no swiftshader retry.
+    const attempts = await waitForLines(1, 3_000);
+    expect(attempts).toHaveLength(1);
+  });
 });
