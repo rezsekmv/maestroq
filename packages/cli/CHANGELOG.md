@@ -1,5 +1,21 @@
 # maestroq
 
+## 0.4.0
+
+### Minor Changes
+
+- 311b9bc: feat: headless Android cold-boots now pass `-gpu host` explicitly (with a one-time automatic fallback to `-gpu swiftshader_indirect` if the host-GPU boot fails). `-no-window` otherwise makes the emulator silently use software rendering regardless of the AVD's `hw.gpu.mode`, which starves GPU-heavy RN/Flutter apps and makes Maestro's first `tapOn` time out. A new per-device `gpu: host | swiftshader_indirect | auto` config field pins the mode and disables the fallback.
+- f66405f: feat: `maestroq daemon start` backgrounds itself by default. It forks a detached `--foreground` child, redirects output to `~/.maestroq/daemon.log`, and returns once the daemon is listening — so `maestroq daemon start && maestroq submit …` is a one-shot (no `&`/`nohup`/`disown`). Pass `--foreground` / `-f` to keep the blocking behavior for launchd/systemd wrappers or debugging.
+
+### Patch Changes
+
+- ae1942d: fix: give each job its own `METRO_CACHE_ROOT` so parallel iOS + Android builds no longer race on Metro's shared FileStore cache (`ENOTEMPTY` from `clear()`). Builds key the cache root by device udid, the shared bundler by metro port; a caller-supplied `METRO_CACHE_ROOT` (env or `spec.env`) still wins.
+- Updated dependencies [311b9bc]
+- Updated dependencies [f66405f]
+- Updated dependencies [ae1942d]
+  - @maestroq/core@0.4.0
+  - @maestroq/daemon@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes
