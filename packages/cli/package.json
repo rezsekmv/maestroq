@@ -1,6 +1,6 @@
 {
   "name": "maestroq",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rezsekmv/maestroq.git",
@@ -21,8 +21,8 @@
     "dist"
   ],
   "dependencies": {
-    "@maestroq/core": "^0.4.0",
-    "@maestroq/daemon": "^0.4.0",
+    "@maestroq/core": "^0.4.1",
+    "@maestroq/daemon": "^0.4.1",
     "citty": "^0.1.6",
     "yaml": "^2.9.0"
   }
