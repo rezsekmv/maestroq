@@ -154,10 +154,84 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
   }
 
   const avd = device.avdName ?? device.udid;
+
+  // Headless `-no-window` makes the emulator silently fall back to software
+  // rendering (swiftshader_indirect) regardless of the AVD's hw.gpu.mode. That
+  // starves GPU-heavy RN/Flutter apps and makes Maestro's first `tapOn` miss
+  // its deadline ("app launched but the first frame isn't ready"). Force host
+  // GPU for headless boots; if that boot fails (older drivers / no working
+  // OpenGL stack) retry once with swiftshader_indirect — unless the user
+  // pinned a mode via `gpu:`, in which case we honor it and don't fall back.
+  const pinned = device.gpu;
+  const firstGpu = device.headless ? (pinned ?? "host") : undefined;
+
+  try {
+    await coldBootEmulator({ device, avd, gpuMode: firstGpu, bootstatusTimeoutMs, logSink });
+  } catch (err) {
+    const canFallback =
+      device.headless &&
+      pinned === undefined &&
+      firstGpu === "host" &&
+      !(err instanceof EmulatorFastExitError);
+    if (!canFallback) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `[boot] adb wait-for-device timed out or failed for AVD "${avd}" (udid ${device.udid}): ${message}`,
+      );
+    }
+    logSink("[boot] host-GPU boot failed; retrying with -gpu swiftshader_indirect");
+    try {
+      await coldBootEmulator({
+        device,
+        avd,
+        gpuMode: "swiftshader_indirect",
+        bootstatusTimeoutMs,
+        logSink,
+      });
+    } catch (err2) {
+      const message = err2 instanceof Error ? err2.message : String(err2);
+      throw new Error(
+        `[boot] adb wait-for-device timed out or failed for AVD "${avd}" (udid ${device.udid}) ` +
+          `after host + swiftshader_indirect GPU attempts: ${message}`,
+      );
+    }
+  }
+}
+
+interface ColdBootOptions {
+  device: DeviceConfig;
+  avd: string;
+  gpuMode: "host" | "swiftshader_indirect" | "auto" | undefined;
+  bootstatusTimeoutMs: number;
+  logSink: (line: string) => void;
+}
+
+// Sentinel error class so bootDevice can distinguish a fast emulator exit
+// (bad config — wrong AVD name, missing binary) from a GPU driver failure
+// that warrants a swiftshader_indirect retry.
+export class EmulatorFastExitError extends Error {
+  constructor(avd: string, exitCode: number | undefined) {
+    super(
+      `[boot] emulator for AVD "${avd}" exited immediately (exit ${exitCode ?? "?"}) — ` +
+        "check that avdName is correct and `emulator` is on PATH",
+    );
+    this.name = "EmulatorFastExitError";
+  }
+}
+
+// How quickly an emulator exit is treated as a hard config error rather
+// than a driver/GPU failure. A healthy GPU boot takes ≥5 s to initialise
+// rendering; anything that dies faster is almost certainly a bad AVD name
+// or missing binary.
+const EMULATOR_FAST_EXIT_WINDOW_MS = 3_000;
+
+async function coldBootEmulator(opts: ColdBootOptions): Promise<void> {
+  const { device, avd, gpuMode, bootstatusTimeoutMs, logSink } = opts;
   const emulatorArgs = ["-avd", avd, "-no-snapshot-load"];
   if (device.headless) {
     emulatorArgs.push("-no-window", "-no-audio", "-no-boot-anim");
   }
+  if (gpuMode) emulatorArgs.push("-gpu", gpuMode);
   logSink(`[boot] emulator ${emulatorArgs.join(" ")}`);
   // emulator runs in background; we just wait for adb to see the device.
   // Spawn detached, don't await, then poll adb wait-for-device.
@@ -166,35 +240,61 @@ export async function bootDevice(opts: BootOptions): Promise<void> {
     stdio: "ignore",
   });
   child.unref();
-  // If the emulator exits non-zero (e.g. wrong AVD name), execa's promise
-  // rejects. Without `.catch`, Node's default unhandled-rejection policy
-  // crashes the daemon. Swallow it here; the user-visible failure comes
-  // from `adb wait-for-device` timing out below with a clear message.
-  child.catch(() => {});
+
+  // If the emulator dies non-zero within EMULATOR_FAST_EXIT_WINDOW_MS it's a
+  // config error (bad AVD name, missing binary), not a GPU driver failure.
+  // Throw EmulatorFastExitError immediately — bootDevice will not retry.
+  // A zero exit within the window is the fake-emulator pattern used in tests
+  // and is harmless (adb wait-for-device already resolved by then).
+  const fastExitGuard = new Promise<never>((_, reject) => {
+    child.then(
+      () => {
+        // exit 0 — not a config error
+      },
+      (err: unknown) => {
+        const ms = (err as { durationMs?: number }).durationMs;
+        const code = (err as { exitCode?: number }).exitCode;
+        if (ms !== undefined && ms < EMULATOR_FAST_EXIT_WINDOW_MS) {
+          reject(new EmulatorFastExitError(avd, code ?? undefined));
+        }
+      },
+    );
+  });
 
   try {
-    await execa("adb", ["-s", device.udid, "wait-for-device"], {
-      timeout: bootstatusTimeoutMs,
-      killSignal: "SIGKILL",
-    });
-    // wait-for-device only proves adbd is listening; PackageManager comes
-    // up later. Wait briefly (up to bootstatusTimeoutMs) for `sys.boot_completed`
-    // then check PM is responsive — same rationale as the get-state path.
-    await execa(
-      "adb",
-      [
-        "-s",
-        device.udid,
-        "shell",
-        'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done',
-      ],
-      { timeout: bootstatusTimeoutMs, killSignal: "SIGKILL", reject: false },
-    );
-    await assertPackageManagerHealthy(device.udid, logSink);
+    await Promise.race([
+      (async () => {
+        await execa("adb", ["-s", device.udid, "wait-for-device"], {
+          timeout: bootstatusTimeoutMs,
+          killSignal: "SIGKILL",
+        });
+        // wait-for-device only proves adbd is listening; PackageManager comes
+        // up later. Wait briefly (up to bootstatusTimeoutMs) for `sys.boot_completed`
+        // then check PM is responsive — same rationale as the get-state path.
+        await execa(
+          "adb",
+          [
+            "-s",
+            device.udid,
+            "shell",
+            'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done',
+          ],
+          { timeout: bootstatusTimeoutMs, killSignal: "SIGKILL", reject: false },
+        );
+        await assertPackageManagerHealthy(device.udid, logSink);
+      })(),
+      fastExitGuard,
+    ]);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `[boot] adb wait-for-device timed out or failed for AVD "${avd}" (udid ${device.udid}): ${message}`,
-    );
+    // Kill the half-booted emulator's process group so a fallback attempt
+    // gets a clean slate (it would otherwise hold the AVD lock / serial).
+    if (child.pid) {
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        // already gone
+      }
+    }
+    throw err;
   }
 }

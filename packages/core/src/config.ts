@@ -20,6 +20,12 @@ export const DeviceConfigSchema = z.object({
   // which the daemon does not control. The dispatcher logs a one-shot
   // warning if this is set on an iOS device.
   headless: z.boolean().default(false),
+  // Android only. GPU mode for a headless cold-boot's `emulator -gpu <mode>`.
+  // Unset → `host` (with an automatic one-time fallback to
+  // `swiftshader_indirect` if the host-GPU boot fails). Pin a value to
+  // disable the fallback. `-no-window` otherwise silently selects software
+  // rendering, which makes GPU-heavy RN apps miss Maestro's first-tap deadline.
+  gpu: z.enum(["host", "swiftshader_indirect", "auto"]).optional(),
 });
 export type DeviceConfig = z.infer<typeof DeviceConfigSchema>;
 

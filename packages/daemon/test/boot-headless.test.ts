@@ -75,6 +75,34 @@ describe("bootDevice Android headless flag", () => {
       "-no-window",
       "-no-audio",
       "-no-boot-anim",
+      "-gpu",
+      "host",
+    ]);
+  });
+
+  it("honors an explicit gpu mode without falling back", async () => {
+    await bootDevice({
+      device: {
+        udid: "emulator-5554",
+        platform: "android",
+        avdName: "Pixel_7",
+        headless: true,
+        gpu: "swiftshader_indirect",
+      },
+      rebootSimBefore: false,
+      logSink: () => undefined,
+      bootstatusTimeoutMs: 5_000,
+    });
+    const argv = await waitForArgv(2_000);
+    expect(argv).toEqual([
+      "-avd",
+      "Pixel_7",
+      "-no-snapshot-load",
+      "-no-window",
+      "-no-audio",
+      "-no-boot-anim",
+      "-gpu",
+      "swiftshader_indirect",
     ]);
   });
 
