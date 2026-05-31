@@ -76,18 +76,18 @@ describe("bootDevice Android headless flag", () => {
       "-no-audio",
       "-no-boot-anim",
       "-gpu",
-      "host",
+      "swiftshader_indirect",
     ]);
   });
 
-  it("honors an explicit gpu mode without falling back", async () => {
+  it("honors an explicit gpu: host override", async () => {
     await bootDevice({
       device: {
         udid: "emulator-5554",
         platform: "android",
         avdName: "Pixel_7",
         headless: true,
-        gpu: "swiftshader_indirect",
+        gpu: "host",
       },
       rebootSimBefore: false,
       logSink: () => undefined,
@@ -102,7 +102,7 @@ describe("bootDevice Android headless flag", () => {
       "-no-audio",
       "-no-boot-anim",
       "-gpu",
-      "swiftshader_indirect",
+      "host",
     ]);
   });
 
